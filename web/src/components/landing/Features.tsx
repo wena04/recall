@@ -4,38 +4,38 @@ import { Calendar, Cloud, Link2, Search, Sparkles, Tag } from "lucide-react";
 const features = [
   {
     icon: Sparkles,
-    title: "AI 驱动",
-    description: "自动摘要与标签，让你的记忆库持续结构化",
+    title: "AI Powered",
+    description: "Automatic summaries and tags keep your memory base structured over time.",
     color: "purple",
   },
   {
     icon: Cloud,
-    title: "多端可用",
-    description: "Web + iMessage 组合，让输入与提醒都在日常流里发生",
+    title: "Cross-Channel Input",
+    description: "Web and iMessage work together so capture and reminders fit your daily flow.",
     color: "blue",
   },
   {
     icon: Link2,
-    title: "关联回忆",
-    description: "把地点、人物、事件连接起来，而不是孤立笔记",
+    title: "Connected Memories",
+    description: "Link places, people, and events instead of saving isolated notes.",
     color: "green",
   },
   {
     icon: Calendar,
-    title: "时间线复盘",
-    description: "按时间回看你的想法演进和行动轨迹",
+    title: "Timeline Review",
+    description: "Look back by time to understand how ideas and actions evolved.",
     color: "orange",
   },
   {
     icon: Tag,
-    title: "分类体系",
-    description: "Food / Events / Sports / Ideas / Medical 一致化存储",
+    title: "Category System",
+    description: "Store memories consistently across Food, Events, Sports, Ideas, and Medical.",
     color: "pink",
   },
   {
     icon: Search,
     title: "Mirror Memory",
-    description: "通过问答快速召回历史语境和个人风格",
+    description: "Ask questions to quickly retrieve historical context and personal voice.",
     color: "indigo",
   },
 ];
@@ -63,9 +63,9 @@ export function Features() {
           viewport={{ once: true }}
           className="mb-16 text-center"
         >
-          <h2 className="mb-6 text-5xl font-bold text-white">强大功能</h2>
+          <h2 className="mb-6 text-5xl font-bold text-white">Powerful Features</h2>
           <p className="mx-auto max-w-3xl text-xl text-purple-200">
-            Recall 提供一整套完整工作流，帮你从信息采集走到可执行回忆。
+            Recall provides an end-to-end workflow from ingestion to actionable memory recall.
           </p>
         </motion.div>
 

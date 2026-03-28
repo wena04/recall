@@ -169,7 +169,7 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8, duration: 0.8 }}
         >
-          你的第二大脑
+          Your second brain
         </motion.p>
       </motion.div>
     </section>

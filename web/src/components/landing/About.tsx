@@ -15,9 +15,9 @@ export function About() {
           viewport={{ once: true }}
           className="mb-16 text-center"
         >
-          <h2 className="mb-6 text-5xl font-bold text-white">关于 Recall</h2>
+          <h2 className="mb-6 text-5xl font-bold text-white">About Recall</h2>
           <p className="mx-auto max-w-3xl text-xl text-slate-300">
-            Recall 是一个革命性的知识管理平台，帮助你捕捉、组织和回忆生活中的每一个重要时刻。像第二大脑一样，让信息持续可回忆、可执行。
+            Recall is a modern memory platform that helps you capture, organize, and revisit what matters. It works like a second brain, turning scattered information into actionable context.
           </p>
         </motion.div>
 
@@ -32,9 +32,9 @@ export function About() {
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-purple-500/10">
               <Brain className="h-8 w-8 text-purple-400" />
             </div>
-            <h3 className="mb-4 text-2xl font-bold text-white">智能记忆</h3>
+            <h3 className="mb-4 text-2xl font-bold text-white">Smart Memory</h3>
             <p className="text-slate-300">
-              利用 AI 自动结构化聊天、链接和碎片信息，让检索和复盘都更快。
+              Use AI to automatically structure chats, links, and fragments so retrieval and reflection are faster.
             </p>
           </motion.div>
 
@@ -48,9 +48,9 @@ export function About() {
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/10">
               <Zap className="h-8 w-8 text-blue-400" />
             </div>
-            <h3 className="mb-4 text-2xl font-bold text-white">快速检索</h3>
+            <h3 className="mb-4 text-2xl font-bold text-white">Fast Recall</h3>
             <p className="text-slate-300">
-              过去的想法、地点和行动项都可追溯，问一句就能找回关键上下文。
+              Ideas, places, and action items stay traceable so one question can bring back key context.
             </p>
           </motion.div>
 
@@ -64,9 +64,9 @@ export function About() {
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
               <Shield className="h-8 w-8 text-green-400" />
             </div>
-            <h3 className="mb-4 text-2xl font-bold text-white">安全可控</h3>
+            <h3 className="mb-4 text-2xl font-bold text-white">Secure and Controlled</h3>
             <p className="text-slate-300">
-              通过权限与存储分层管理，确保你的私人信息在可用的同时保持可控。
+              Layered access and storage controls keep private information both usable and protected.
             </p>
           </motion.div>
         </div>

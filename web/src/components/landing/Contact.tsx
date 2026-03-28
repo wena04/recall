@@ -18,7 +18,7 @@ export function Contact() {
         >
           <h2 className="mb-6 text-5xl font-bold text-white">Ready to Recall?</h2>
           <p className="mx-auto max-w-2xl text-xl text-slate-300">
-            从聊天和收藏开始，把碎片信息变成可追溯的个人知识网络。
+            Start with chats and saved links, then turn fragments into a searchable personal knowledge graph.
           </p>
         </motion.div>
 
@@ -49,7 +49,7 @@ export function Contact() {
             <div className="mt-6 space-y-3">
               <input
                 type="text"
-                placeholder="你的姓名"
+                placeholder="Your name"
                 className="h-10 w-full rounded-lg border border-slate-600 bg-slate-900/50 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
               <input
@@ -59,7 +59,7 @@ export function Contact() {
               />
               <textarea
                 rows={4}
-                placeholder="告诉我们你的想法..."
+                placeholder="Tell us what you are building..."
                 className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
@@ -77,7 +77,7 @@ export function Contact() {
                 <Mail className="h-6 w-6 text-purple-400" />
               </div>
               <div>
-                <h4 className="mb-1 text-lg font-semibold text-white">邮箱</h4>
+                <h4 className="mb-1 text-lg font-semibold text-white">Email</h4>
                 <p className="text-slate-300">contact@recall.app</p>
               </div>
             </div>
@@ -87,13 +87,13 @@ export function Contact() {
                 <MessageSquare className="h-6 w-6 text-blue-400" />
               </div>
               <div>
-                <h4 className="mb-1 text-lg font-semibold text-white">在线客服</h4>
-                <p className="text-slate-300">每天 9:00 - 18:00</p>
+                <h4 className="mb-1 text-lg font-semibold text-white">Live support</h4>
+                <p className="text-slate-300">Daily 9:00 - 18:00</p>
               </div>
             </div>
 
             <div className="border-t border-slate-700 pt-8">
-              <h4 className="mb-4 text-lg font-semibold text-white">关注我们</h4>
+              <h4 className="mb-4 text-lg font-semibold text-white">Follow us</h4>
               <div className="flex space-x-4">
                 {[MessageSquare, Link2, Mail].map((Icon, index) => (
                   <motion.a
@@ -117,7 +117,7 @@ export function Contact() {
           viewport={{ once: true }}
           className="mt-16 border-t border-slate-700 pt-8 text-center"
         >
-          <p className="text-slate-400">© 2026 Recall. 你的第二大脑，让记忆永存。</p>
+          <p className="text-slate-400">© 2026 Recall. Your second brain for lasting memory.</p>
         </motion.div>
       </div>
     </section>
