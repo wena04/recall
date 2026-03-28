@@ -14,6 +14,7 @@ import messageRoutes from "./routes/message.js";
 import knowledgeItemsRoutes from "./routes/knowledge_items.js";
 import queryRoutes from "./routes/query.js";
 import locationRoutes from "./routes/location.js";
+import imessageRoutes from "./routes/imessage.js";
 import { attachWebSocketServer } from "./services/location.js";
 
 const app: express.Application = express();
@@ -30,6 +31,7 @@ app.use("/api", messageRoutes);
 app.use("/api", knowledgeItemsRoutes);
 app.use("/api", queryRoutes);
 app.use("/api", locationRoutes);
+app.use("/api", imessageRoutes);
 
 /**
  * health

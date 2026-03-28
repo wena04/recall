@@ -81,6 +81,15 @@ export function formatRecallImessageReply(params: {
 }
 
 /**
+ * One-line self-confirmation sent to RECALL_IMESSAGE_TARGET after auto-ingest on outgoing message.
+ * NOT sent to the original conversation — only to the user's own number.
+ */
+export function formatSelfNotification(summary: string, category?: string): string {
+  const short = summary.length > 120 ? `${summary.slice(0, 117)}…` : summary;
+  return `✦ Saved to brain: ${short}${category ? ` · ${category}` : ''}`;
+}
+
+/**
  * Process a recall request (stub when API ingest unavailable)
  */
 export async function processRecall(
