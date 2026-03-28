@@ -151,7 +151,7 @@ export function Hero() {
         transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
       >
         <motion.h1
-          className="mb-4 text-6xl font-bold text-white md:text-8xl"
+          className="mb-4 bg-gradient-to-r from-orange-200 via-rose-100 to-white bg-clip-text text-6xl font-bold text-transparent md:text-8xl"
           animate={{
             textShadow: [
               "0 0 20px rgba(167, 139, 250, 0.5)",

@@ -15,7 +15,12 @@ export function About() {
           viewport={{ once: true }}
           className="mb-16 text-center"
         >
-          <h2 className="mb-6 text-5xl font-bold text-white">About Recall</h2>
+          <h2 className="mb-6 text-5xl font-bold text-white">
+            About{" "}
+            <span className="bg-gradient-to-r from-orange-200 via-rose-100 to-white bg-clip-text text-transparent">
+              Recall
+            </span>
+          </h2>
           <p className="mx-auto max-w-3xl text-xl text-slate-300">
             Recall is a modern memory platform that helps you capture, organize, and revisit what matters. It works like a second brain, turning scattered information into actionable context.
           </p>
@@ -48,7 +53,12 @@ export function About() {
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/10">
               <Zap className="h-8 w-8 text-blue-400" />
             </div>
-            <h3 className="mb-4 text-2xl font-bold text-white">Fast Recall</h3>
+            <h3 className="mb-4 text-2xl font-bold text-white">
+              Fast{" "}
+              <span className="bg-gradient-to-r from-orange-200 via-rose-100 to-white bg-clip-text text-transparent">
+                Recall
+              </span>
+            </h3>
             <p className="text-slate-300">
               Ideas, places, and action items stay traceable so one question can bring back key context.
             </p>

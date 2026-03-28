@@ -16,7 +16,13 @@ export function Contact() {
           viewport={{ once: true }}
           className="mb-16 text-center"
         >
-          <h2 className="mb-6 text-5xl font-bold text-white">Ready to Recall?</h2>
+          <h2 className="mb-6 text-5xl font-bold text-white">
+            Ready to{" "}
+            <span className="bg-gradient-to-r from-orange-200 via-rose-100 to-white bg-clip-text text-transparent">
+              Recall
+            </span>
+            ?
+          </h2>
           <p className="mx-auto max-w-2xl text-xl text-slate-300">
             Start with chats and saved links, then turn fragments into a searchable personal knowledge graph.
           </p>
@@ -36,7 +42,10 @@ export function Contact() {
                 to="/login"
                 className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:from-purple-700 hover:to-indigo-700"
               >
-                Sign in to Recall
+                Sign in to{" "}
+                <span className="bg-gradient-to-r from-orange-200 via-rose-100 to-white bg-clip-text text-transparent">
+                  Recall
+                </span>
               </Link>
               <Link
                 to="/connect"
