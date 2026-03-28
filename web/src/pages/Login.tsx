@@ -11,9 +11,13 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate('/dashboard');
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        navigate('/connect');
+        navigate('/dashboard');
       }
     });
 
@@ -37,7 +41,7 @@ export default function Login() {
         />
         <div className="mb-4 mt-4">
           <StatusBadge tone="stone" className="normal-case tracking-normal text-[11px]">
-            Google and GitHub login supported
+            Google login supported
           </StatusBadge>
         </div>
         <Auth
@@ -60,7 +64,9 @@ export default function Login() {
               },
             },
           }}
-          providers={['google', 'github']}
+          providers={['google']}
+          onlyThirdPartyProviders
+          redirectTo={`${window.location.origin}/dashboard`}
         />
       </BentoCard>
     </div>

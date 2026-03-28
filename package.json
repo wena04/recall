@@ -23,6 +23,7 @@
     "agent:notify-poll": "npm run notify-poll -w imessage-agent",
     "demo:load": "tsx demo/load-fixtures.ts",
     "ingest:kalshi": "tsx scripts/ingest-kalshi-csv.ts",
+    "data:reassign-user": "tsx scripts/reassign-all-data-to-user.ts",
     "dev:ensure-user": "tsx scripts/ensure-dev-auth-user.ts",
     "dev:smoke-api": "tsx scripts/smoke-api.ts",
     "ingest:local": "tsx scripts/bulk-ingest-local.ts",
