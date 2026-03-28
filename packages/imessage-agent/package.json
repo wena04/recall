@@ -1,0 +1,24 @@
+{
+  "name": "imessage-agent",
+  "version": "1.0.0",
+  "description": "AI agent to summarize and recall your iMessage chat history",
+  "private": true,
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test:imessage": "tsx test/test-read.ts",
+    "test:send": "tsx test/test-send.ts",
+    "test:watch": "tsx test/test-watch.ts"
+  },
+  "dependencies": {
+    "@photon-ai/imessage-kit": "latest",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

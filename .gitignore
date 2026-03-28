@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vite
+.claude/
+
+# TRAE Solo IDE — local scratch (not part of canonical docs)
+.trae/
+
+# Secrets — never commit env files
+.env
+.env*
+!.env.example
+
+# Vercel local project link
+.vercel/
+
+# Test coverage
+coverage/
+
+# SSL certificates
+*.pem
+
+# TypeScript build cache
+*.tsbuildinfo

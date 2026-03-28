@@ -1,0 +1,3 @@
+# Keep folder in repo; ignore all real exports / scraper output you drop here.
+*
+!.gitignore

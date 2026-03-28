@@ -1,0 +1,88 @@
+[
+  {
+    "original_content_url": "Omakase Bar in SF — friend said the wagyu don is insane, perfect for date night. Reservations needed 2 weeks out.",
+    "summary": "Omakase Bar in San Francisco is a high-end Japanese restaurant famous for its wagyu don. Reservations are required 2 weeks in advance, ideal for a special occasion.",
+    "category": "Food",
+    "location_city": "San Francisco",
+    "location_name": "Omakase Bar",
+    "action_items": [{ "task": "Make a reservation 2 weeks in advance", "owner": "me" }],
+    "source_context": "friend said the wagyu don is insane, perfect for date night",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "Coachella 2026 lineup dropped — Kendrick Lamar headlining Friday night. Weekend 1 tickets already sold out but Weekend 2 still available on StubHub.",
+    "summary": "Kendrick Lamar is headlining Coachella 2026 on Friday of Weekend 1. Weekend 2 tickets are still available via StubHub.",
+    "category": "Events",
+    "location_city": "Indio",
+    "location_name": "Coachella Valley Music and Arts Festival",
+    "action_items": [{ "task": "Buy Weekend 2 tickets on StubHub", "owner": "me" }],
+    "source_context": "Weekend 2 still available on StubHub",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "Lakers vs Warriors playoff game 5 at Crypto.com Arena on Saturday. Section 114 tickets going for $80 on SeatGeek right now.",
+    "summary": "Lakers vs Warriors Game 5 is this Saturday at Crypto.com Arena in LA. Tickets in Section 114 are available for $80 on SeatGeek.",
+    "category": "Sports",
+    "location_city": "Los Angeles",
+    "location_name": "Crypto.com Arena",
+    "action_items": [{ "task": "Buy Section 114 tickets on SeatGeek", "owner": "me" }],
+    "source_context": "Section 114 tickets going for $80 on SeatGeek right now",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "Idea: build a shared grocery list app that syncs with roommates in real time and auto-generates a weekly meal plan based on what you have. Could use Supabase realtime + OpenAI.",
+    "summary": "App idea for a real-time shared grocery list with roommates that also auto-generates weekly meal plans. Tech stack would use Supabase Realtime and OpenAI.",
+    "category": "Ideas",
+    "location_city": null,
+    "location_name": null,
+    "action_items": [
+      { "task": "Sketch out the data model for shared grocery lists", "owner": "me" },
+      { "task": "Research Supabase Realtime pricing", "owner": "me" }
+    ],
+    "source_context": "build a shared grocery list app that syncs with roommates in real time",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "Need to get a full blood panel done before annual physical in July. Dr. Lee at Keck Medicine USC — call to schedule before end of June.",
+    "summary": "Annual physical is in July and requires a full blood panel beforehand at Keck Medicine USC with Dr. Lee. Call to schedule before end of June.",
+    "category": "Medical",
+    "location_city": "Los Angeles",
+    "location_name": "Keck Medicine USC",
+    "action_items": [{ "task": "Call Keck Medicine USC to schedule blood panel before end of June", "owner": "me" }],
+    "source_context": "Dr. Lee at Keck Medicine USC — call to schedule before end of June",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "That boba place in Alhambra — Twinkle Tea House. The brown sugar taro milk tea with coconut jelly is a must-try. Cash only, closes at 9pm.",
+    "summary": "Twinkle Tea House in Alhambra is known for its brown sugar taro milk tea with coconut jelly. It is cash only and closes at 9pm.",
+    "category": "Food",
+    "location_city": "Alhambra",
+    "location_name": "Twinkle Tea House",
+    "action_items": [{ "task": "Bring cash when visiting", "owner": "me" }],
+    "source_context": "Cash only, closes at 9pm",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "USC BIA networking mixer at Village next Thursday — good chance to meet alumni from McKinsey and Bain. Bring business cards.",
+    "summary": "USC BIA is hosting a networking mixer at The Village next Thursday with McKinsey and Bain alumni attending. Business cards are recommended.",
+    "category": "Events",
+    "location_city": "Los Angeles",
+    "location_name": "USC Village",
+    "action_items": [
+      { "task": "Prepare and print business cards", "owner": "me" },
+      { "task": "Research McKinsey and Bain recruiting timelines", "owner": "me" }
+    ],
+    "source_context": "good chance to meet alumni from McKinsey and Bain",
+    "source_type": "text"
+  },
+  {
+    "original_content_url": "Weekend hiking idea: Temescal Canyon trail in Pacific Palisades. 3.8 miles, 900ft elevation, great ocean views at the top. Best to go early morning before crowds.",
+    "summary": "Temescal Canyon in Pacific Palisades is a 3.8-mile hike with 900ft elevation gain and ocean views. Going early morning avoids the crowds.",
+    "category": "Sports",
+    "location_city": "Pacific Palisades",
+    "location_name": "Temescal Canyon Trail",
+    "action_items": [{ "task": "Plan an early morning hike at Temescal Canyon", "owner": "me" }],
+    "source_context": "Best to go early morning before crowds",
+    "source_type": "text"
+  }
+]
