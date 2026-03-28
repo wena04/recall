@@ -33,9 +33,14 @@ export default function Login() {
           action={
             <Link
               to="/"
-              className="shrink-0 rounded-xl border border-violet-200 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 transition hover:border-violet-300 hover:text-violet-900"
+              className="shrink-0 rounded-full border border-violet-200 bg-white/90 p-1 transition hover:border-violet-300"
+              aria-label="Back to homepage"
             >
-              Back
+              <img
+                src="/brain-mascot-cutout.png"
+                alt="Recall mascot"
+                className="h-10 w-10 object-contain"
+              />
             </Link>
           }
         />

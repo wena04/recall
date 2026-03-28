@@ -127,7 +127,11 @@ export function Hero() {
       <div ref={mountRef} className="absolute inset-0 z-0" />
 
       <div className="absolute left-0 right-0 top-6 z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4">
-        <p className="text-sm font-semibold tracking-wide text-purple-100">Recall</p>
+        <img
+          src="/brain-mascot-cutout.png"
+          alt="Recall brain mascot"
+          className="h-20 w-20 object-contain drop-shadow-md"
+        />
         <div className="flex items-center gap-2">
           <Link
             to="/connect"

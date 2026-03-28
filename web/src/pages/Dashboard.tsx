@@ -12,7 +12,6 @@ import {
 import { User } from "@supabase/supabase-js";
 import Settings from "@/components/Settings";
 import BentoCard from "@/components/ui/BentoCard";
-import SectionHeader from "@/components/ui/SectionHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import Chatbot from "@/components/Chatbot";
 import LocationTracker from "@/components/LocationTracker";
@@ -185,22 +184,36 @@ export default function Dashboard() {
     <div className="flex min-h-screen flex-col items-center bg-gradient-to-b from-violet-50/80 to-stone-50 px-4 py-12 sm:px-6 lg:px-8">
       {user && <LocationTracker userId={user.id} />}
       <div className="w-full max-w-6xl">
-        <SectionHeader
-          className="mb-8"
-          title="Welcome"
-          description={`Your memory feed is organized here${user?.email ? `, ${user.email.split("@")[0]}` : ""}. Add more sources anytime from Connect.`}
-          action={
-            <div className="flex items-center gap-3">
-              <Settings user={user} />
-              <button
-                onClick={handleLogout}
-                className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
-              >
-                Logout
-              </button>
-            </div>
-          }
-        />
+        <div className="relative mb-8">
+          <Link
+            to="/"
+            aria-label="Back to homepage"
+            className="absolute left-0 top-0 inline-flex rounded-full p-1 transition hover:bg-white/70"
+          >
+            <img
+              src="/brain-mascot-cutout.png"
+              alt="Recall mascot"
+              className="h-12 w-12 object-contain drop-shadow-sm"
+            />
+          </Link>
+
+          <div className="absolute right-0 top-0 flex items-center gap-3">
+            <Settings user={user} />
+            <button
+              onClick={handleLogout}
+              className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
+            >
+              Logout
+            </button>
+          </div>
+
+          <div className="mx-auto max-w-3xl pt-1 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Welcome</h1>
+            <p className="mt-1 text-sm leading-relaxed text-stone-600">
+              {`Your memory feed is organized here${user?.email ? `, ${user.email.split("@")[0]}` : ""}. Add more sources anytime from Connect.`}
+            </p>
+          </div>
+        </div>
 
         <BentoCard className="mx-auto mb-8 max-w-5xl bg-gradient-to-r from-violet-50 to-white">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
