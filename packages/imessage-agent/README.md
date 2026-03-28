@@ -90,6 +90,16 @@ Uses `SECOND_BRAIN_API_URL`, `SECOND_BRAIN_USER_ID`, and optional `RECALL_MAX_CH
 
 **Debug empty scans:** set `RECALL_SCAN_DEBUG=true` to log each thread’s `getMessages` raw count, how many have non-empty `text`, and why a row was skipped (same env works for iMessage **`recall all`**).
 
+### Location pings → iMessage (queue + poll)
+
+When the web app posts **`POST /api/location`** and the backend enqueues a message, deliver it with:
+
+```bash
+npm run agent:notify-poll
+```
+
+Uses `SECOND_BRAIN_API_URL`, `SECOND_BRAIN_USER_ID`, optional `NOTIFY_POLL_INTERVAL_MS` (default `30000`). The user must set **notification frequency** and **iMessage target** in Dashboard → Settings.
+
 ## 5. Trigger from iPhone or Mac Messages
 
 In the **same chat** where you messaged the bot, send a message containing the trigger, e.g.:
@@ -115,5 +125,7 @@ The agent loads history **for that conversation** (`chatId` from Photon), not un
 | `npm run agent:test:watch` | Watch incoming messages. |
 | `npm run agent:start` | Production-style: watch + `recall` handler + ingest hook. |
 | `npm run agent:dev` | Same as `start` with `tsx watch`. |
+| `npm run agent:scan-all` | Multi-chat ingest once (CLI). |
+| `npm run agent:notify-poll` | Poll API for location-queue iMessages + send via Photon. |
 
 Upstream docs: [Photon iMessage Kit](https://github.com/photon-hq/imessage-kit), [`llms.txt`](https://github.com/photon-hq/imessage-kit/blob/main/llms.txt).

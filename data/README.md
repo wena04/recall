@@ -6,8 +6,9 @@ Use this split so **demo-safe** stuff is commit-friendly and **real exports** ne
 
 | Location | Purpose |
 |----------|---------|
-| **`demo/sample_data.json`** | Canonical JSON array matching `knowledge_items` columns; **`npm run demo:load`** reads this. |
-| **`data/fixtures/*.json`** | Optional extra seed files. Add a small loader script or merge into `demo:load` when needed. |
+| **`demo/sample_data.json`** | Canonical seed: **Food, Events, Sports, Ideas, Medical** across LA / Seattle / SF / NYC + optional `persona` / `recall_enrichment`; **`npm run demo:load`**. |
+| **`data/fixtures/diverse_knowledge_items.json`** | Same array as `demo/sample_data.json` (copy for discoverability). Load with `FIXTURE_FILE=./data/fixtures/diverse_knowledge_items.json USER_ID=... npm run demo:load`. |
+| **`data/fixtures/*.json`** | Other optional seeds; use **`FIXTURE_FILE`** with `demo:load`. |
 
 Shape matches **`docs/PROGRESS.md`** API contract (category, `action_items`, `source_type`, etc.).
 

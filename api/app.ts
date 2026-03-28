@@ -13,6 +13,8 @@ import authRoutes from "./routes/auth.js";
 import messageRoutes from "./routes/message.js";
 import knowledgeItemsRoutes from "./routes/knowledge_items.js";
 import queryRoutes from "./routes/query.js";
+import locationRoutes from "./routes/location.js";
+import { attachWebSocketServer } from "./services/location.js";
 
 const app: express.Application = express();
 
@@ -27,6 +29,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", messageRoutes);
 app.use("/api", knowledgeItemsRoutes);
 app.use("/api", queryRoutes);
+app.use("/api", locationRoutes);
 
 /**
  * health

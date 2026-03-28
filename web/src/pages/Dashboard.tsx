@@ -15,6 +15,7 @@ import BentoCard from "@/components/ui/BentoCard";
 import SectionHeader from "@/components/ui/SectionHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import Chatbot from "@/components/Chatbot";
+import LocationTracker from "@/components/LocationTracker";
 
 interface PersonaShape {
   chat_role?: string;
@@ -153,6 +154,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-gradient-to-b from-violet-50/80 to-stone-50 px-4 py-12 sm:px-6 lg:px-8">
+      {user && <LocationTracker userId={user.id} />}
       <div className="w-full max-w-6xl">
         <SectionHeader
           className="mb-8"

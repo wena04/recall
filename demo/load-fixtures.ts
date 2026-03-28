@@ -1,11 +1,17 @@
 /**
- * Demo fixture loader — seeds sample_data.json into Supabase
- * Usage: USER_ID=<your-supabase-user-id> npm run demo:load
+ * Demo fixture loader — seeds JSON into Supabase `knowledge_items`.
+ *
+ *   USER_ID=<auth.users.id> npm run demo:load
+ *
+ * Default file: `demo/sample_data.json`. Override:
+ *   FIXTURE_FILE=./data/fixtures/diverse_knowledge_items.json USER_ID=... npm run demo:load
+ *
+ * Rows use schema categories only: Food | Events | Sports | Ideas | Medical.
  */
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,20 +32,22 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const fixtures = JSON.parse(
-  readFileSync(join(__dirname, 'sample_data.json'), 'utf-8')
-) as Array<{
-  original_content_url: string;
-  summary: string;
-  category: string;
-  location_city: string | null;
-  location_name: string | null;
-  action_items: { task: string; owner: string }[];
-  source_context: string;
-  source_type: string;
-}>;
+const fixturePath = process.env.FIXTURE_FILE
+  ? resolve(process.cwd(), process.env.FIXTURE_FILE)
+  : join(__dirname, 'sample_data.json');
 
-console.log(`Loading ${fixtures.length} demo fixtures for user ${USER_ID}...\n`);
+const fixtures = JSON.parse(readFileSync(fixturePath, 'utf-8')) as Array<
+  Record<string, unknown> & {
+    original_content_url: string;
+    summary: string;
+    category: string;
+    action_items: { task: string; owner: string }[];
+    source_context: string;
+    source_type: string;
+  }
+>;
+
+console.log(`Loading ${fixtures.length} demo fixtures from ${fixturePath} for user ${USER_ID}...\n`);
 
 let loaded = 0;
 for (const fixture of fixtures) {

@@ -1,5 +1,5 @@
-import { supabase } from "../lib/supabase";
-import { callMiniMaxTextCompletion } from "./llm";
+import { supabase } from "../lib/supabase.js";
+import { callMiniMaxTextCompletion } from "./llm.js";
 
 const RAG_MODEL = process.env.MINIMAX_RAG_MODEL || "M2-her";
 const userStyleCache = new Map<string, string>();

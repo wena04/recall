@@ -3,6 +3,7 @@ import { IMessageSDK } from '@photon-ai/imessage-kit';
 import { formatRecallImessageReply, processRecall } from './ai-stub.js';
 import { ingestTranscriptToSecondBrain } from './ingest-api.js';
 import { scanAllChatsAndIngest } from './scan-all-chats.js';
+import WebSocket from 'ws';
 
 // ─── Config ──────────────────────────────────────────────
 const TRIGGER = (process.env.RECALL_TRIGGER || 'recall').toLowerCase();
@@ -244,6 +245,28 @@ async function handleMessage(message: any, isGroup: boolean) {
     if (fallback) await sdk.send(fallback, '😅 Something went wrong. Try again?');
   }
 }
+
+const ws = new WebSocket(`ws://localhost:3001?userId=${process.env.SECOND_BRAIN_USER_ID}`);
+
+ws.on('open', () => {
+  console.log('🟢 Connected to backend for notifications');
+});
+
+ws.on('message', (data) => {
+  try {
+    const message = JSON.parse(data.toString());
+    if (message.type === 'notification') {
+      console.log('📬 Received notification:', message.message);
+      sdk.send(process.env.RECALL_IMESSAGE_TARGET || '', message.message);
+    }
+  } catch (error) {
+    console.error('Error parsing message from backend:', error);
+  }
+});
+
+ws.on('close', () => {
+  console.log('🔴 Disconnected from backend');
+});
 
 // ─── Watch ───────────────────────────────────────────────
 await sdk.startWatching({

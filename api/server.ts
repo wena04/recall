@@ -3,6 +3,7 @@
  * (dotenv is configured in app.ts with repo-root `.env` path)
  */
 import app from './app.js';
+import { attachWebSocketServer } from './services/location.js';
 
 /**
  * start server with port
@@ -12,6 +13,8 @@ const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
   console.log(`Server ready on port ${PORT}`);
 });
+
+attachWebSocketServer(server);
 
 /**
  * close server
