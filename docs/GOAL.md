@@ -2,6 +2,8 @@
 
 **Audience:** Human team + AI coding agents (TRAE, Cursor, Claude).
 
+**Last updated:** 2026-03-28 (kept in sync with **`PROGRESS.md`** after major milestones).
+
 **Rule of Engagement:** This is the immutable product and architecture contract. AI agents must read this file before writing any code to understand the system context, the MVC boundaries, and the data schema.
 
 **Canonical docs in this repo:** only **`GOAL.md`** (this file) and **`PROGRESS.md`**. Do not add parallel architecture files without folding them here or into **PROGRESS**.
@@ -25,24 +27,29 @@
 ### Feature 1: Omni-Channel Ingestion (The Funnel)
 * **Action:** Users feed the brain via chat exports (WhatsApp/WeChat `.txt`), pasted links, or image uploads (screenshots of IG/Rednote).
 * **Native Magic:** macOS users run the Photon iMessage SDK to watch specific group chats and ingest context in real-time.
+* **Batch / testing:** Optional **`recall all`** (iMessage) or **`npm run agent:scan-all`** (CLI) walks multiple threads — one **`POST /api/message`** per chat for category variety across the DB.
 
 ### Feature 2: AI Auto-Categorization (The Brain)
-* **Action:** The backend sends raw text and screenshots to the MiniMax Text/Vision APIs.
-* **Extraction:** MiniMax is strictly prompted to extract the location, summarize the vibe, and assign a category tag (🍔 Food/Boba, 🎫 Events, ⚽ Sports, 💡 Ideas, 🏥 Medical).
+* **Action:** The backend sends raw text and screenshots to MiniMax (Anthropic-compatible **Messages** API for text; native **`chatcompletion_v2`** for vision).
+* **Extraction:** MiniMax outputs structured JSON: location, summary, category (**Food | Events | Sports | Ideas | Medical**), **`persona`**, **`recall_enrichment`** (for chat-style ingests), validated with Zod before writes.
+* **Model split (intent):** Use **strong structured / engineering models** for extraction (default **`MINIMAX_MODEL`** e.g. M2.7-class). Use **dialogue / persona models** for conversational retrieval (see Feature 5). Use **`MINIMAX_LOCATION_MODEL`** (optional) for short location-ping copy. Configure via env — see **`PROGRESS.md`**.
 
 ### Feature 3: The Reflection Dashboard (The "Cute" UI)
-* **Vibe:** A React-based, highly visual "Bento Box" UI (rounded corners, pastel tags, masonry grid).
-* **Analytics:** Recharts/Chart.js visualizes the user's "Digital Diet" (e.g., "45% of your saved items this month are Food-related").
-* **Knowledge Board:** A filterable grid of all extracted memories, linking back to the original chat source.
+* **Vibe:** React + Bento-style cards, pastel tags, memory list with category, locations, optional **persona** and **recall_enrichment** (keywords, texting style).
+* **Analytics:** **Recharts** “Digital diet” chart — share of saved items by **category** (counts from DB; category was set at **ingest** time, not a new LLM call on page load).
+* **Knowledge Board:** List/detail of extracted memories; link back to original snippet via **`original_content_url`** / **`source_context`**.
 
 ### Feature 4: Proactive Location Pings (The Flex)
-* **Action:** The web app tracks location. The user sets a "Notification Frequency" in the UI (e.g., "Ping me once a day" or "Ping me when I'm within 5 miles").
-* **Execution:** When the user arrives in a new city, the Node backend triggers the Photon agent to send a native iMessage: *"📍 Welcome! Based on your saved reels from last month, here are 3 spots you wanted to check out..."*
+* **Action:** The web app (with user permission) periodically sends **coarse geolocation** to the backend. **Settings** stores **notification frequency** (**off | hourly | every_6h | daily | new_city_only**) and an **iMessage delivery target** (phone or Photon **`chatId`**).
+* **Backend:** **`POST /api/location`** receives lat/lng → reverse-geocode to a **city/area** (OSM Nominatim) → match **`knowledge_items`** by **`location_city` / `location_name`** → rate-limit per frequency → optional MiniMax draft → enqueue **`notification_outbox`**.
+* **Execution (iMessage as the “notification”):** The **Photon agent does not receive a cloud WebSocket** in this repo. A local process **`npm run agent:notify-poll`** polls **`GET /api/notifications/pending/:userId`**, **`send()`**s each body to the configured target, then **`POST /api/notifications/:id/ack`**. The user still gets a normal **iMessage** (and iOS banner/lock screen as usual).
+* **Not yet in scope:** Per-building geofencing, sub-mile radius matching, or PostGIS on **`knowledge_items`** unless explicitly added and migrated.
 
 ### Feature 5: The "Mirror Memory" Chatbot (RAG + Persona)
-* **Action:** Users can query their saved database using natural language either through a React chat widget on the dashboard or natively via the Photon iMessage agent.
-* **Retrieval (RAG):** The backend searches Supabase for relevant memories based on the user's question (e.g., "What LA cafes did we save?").
-* **Persona Injection:** The MiniMax prompt is dynamically injected with the user's "Tone Profile." The AI does not answer like a generic assistant; it acts as the user's digital clone, delivering the retrieved memories using the user's exact slang, humor, and personal context.
+* **Action:** Users query saved memories from the **Dashboard** widget (**`POST /api/query`**) and (stretch) natively via Photon.
+* **Retrieval (RAG):** Backend loads relevant **`knowledge_items`** (e.g. **`textSearch`** on **`summary`**) and injects **`recall_enrichment.texting_style`** when available.
+* **Model:** **`MINIMAX_RAG_MODEL`** (default **M2-her**-class id) via the same Anthropic-compatible Messages path as other text calls — **separate from** ingest **`MINIMAX_MODEL`**.
+* **Persona Injection:** Prompt asks the model to answer in the user’s voice using stored style snippets — **not** fine-tuning weights on the database.
 
 ---
 
@@ -53,34 +60,34 @@
 | Layer | Choice |
 |-------|--------|
 | IDE / story | **TRAE** (`@Chat` for planning, `@Builder` for execution) |
-| AI Engine | **MiniMax** (Text API for extraction/summarization, Vision API for screenshots) |
+| AI Engine | **MiniMax** — Anthropic-compatible **`/v1/messages`** (text, RAG, location copy); native **`/text/chatcompletion_v2`** (vision) |
 | Native Interface | **Photon** iMessage Kit — **`packages/imessage-agent/`**, macOS |
-| Frontend (View) | **React + Vite + Tailwind CSS** — **`web/`** (Bento Box styling, Recharts) |
-| Backend (Controller) | **Node.js + Express** — **`api/`** (orchestrates MiniMax calls and Photon webhooks) |
-| Database (Model) | **Supabase (PostgreSQL)** — schema in **`supabase/migrations/`** |
+| Frontend (View) | **React + Vite + Tailwind CSS** — **`web/`** (Recharts, Radix) |
+| Backend (Controller) | **Node.js + Express** — **`api/`** |
+| Database (Model) | **Supabase (PostgreSQL)** — **`supabase/migrations/`** |
 
 ### 3.2 MVC Enforcement for AI Agents
 
-* Keep route handlers in `api/routes/` thin. All MiniMax and Photon logic must live in **`api/services/`**.
-* Frontend components must remain purely presentational, fetching data from the Express backend, never calling MiniMax directly.
-* Add domain logic in **`api/services/`** first; routes validate and delegate.
+* **`api/load-env.ts`** must load **repo-root** `.env` **before** any module that reads **`process.env`** (e.g. **`lib/supabase.ts`**). Import it **first** in **`app.ts`**.
+* Keep route handlers in **`api/routes/`** thin. MiniMax, geocoding, location rules, and RAG live in **`api/services/`**.
+* Frontend never calls MiniMax directly; only **`/api/*`**.
 
 ### 3.3 Deployment (Vercel)
 
 * **Frontend:** Vite build output → repo root **`dist/`** (see **`web/vite.config.ts`**).
 * **API:** **`api/index.ts`** as serverless handler; **`vercel.json`** rewrites **`/api/*`** → that function and **`/*`** → **`index.html`**.
-* **`packages/imessage-agent/`** is **not** part of the Vercel deployment (see **`.vercelignore`**).
+* **`packages/imessage-agent/`** is **not** part of the Vercel deployment (see **`.vercelignore`**). Location **delivery** requires a **Mac** running **`agent:notify-poll`** (or equivalent) against your deployed API URL.
 * **Secrets:** set in Vercel Project → Environment Variables. **Never commit secrets.**
 
 ### 3.4 Demo Integrity
 
-Ideal UX is "connect everything in one click." **Build** either a **real** path (Photon, exports, optional local ingest) or a **transparent** simulated onboarding — never silent fake enterprise integrations. Staged fixtures are OK if **disclosed** in UI and pitch.
+Ideal UX is "connect everything in one click." **Build** either a **real** path (Photon, exports, optional local ingest) or a **transparent** simulated onboarding — never silent fake enterprise integrations. Staged fixtures are OK if **disclosed** in UI and pitch (**`demo:load`**, **`demo/sample_data.json`**).
 
 ---
 
 ## 4. The Data Contract (LLM JSON Schema)
 
-To ensure the AI doesn't break the database, **MiniMax must output strictly in this JSON format** during the ingestion phase:
+During **ingestion**, MiniMax should return JSON matching this shape (see **`api/services/extract.ts`** for the canonical Zod schema):
 
 ```json
 {
@@ -93,9 +100,13 @@ To ensure the AI doesn't break the database, **MiniMax must output strictly in t
   "action_items": [
     { "task": "string", "owner": "string" }
   ],
-  "source_context": "The original text snippet or image description."
+  "source_context": "The original text snippet or image description.",
+  "persona": null,
+  "recall_enrichment": null
 }
 ```
+
+For **chat / iMessage transcripts**, **`recall_enrichment`** may be an object with **`keywords`**, **`places`**, **`courses_or_projects`**, **`texting_style`**. **`persona`** may describe chat role and tone. Plain notes/links often use **`null`** for both.
 
 ---
 
@@ -106,22 +117,18 @@ second-brain-recall/
 ├── docs/
 │   ├── GOAL.md          ← this file (North Star)
 │   └── PROGRESS.md      ← living build state — update after milestones
-├── data/                ← samples, `raw_posts/` (CN paste .txt), parser output in `output/` (gitignored); `data/local/` = private exports (see data/README.md)
-├── demo/                ← `sample_data.json` + `demo:load` script
-├── scripts/             ← bulk ingest, etc.; parsers for downloaded files → `scripts/ingest/`
+├── data/                ← samples, fixtures, raw_posts/ … (see data/README.md)
+├── demo/                ← sample_data.json + demo:load (+ optional FIXTURE_FILE)
+├── scripts/             ← bulk ingest, parsers → scripts/ingest/
 ├── web/                 ← **frontend** (Vite root); build → ../dist
-├── api/                 ← **backend** — Express; server.ts (local), index.ts (Vercel)
+├── api/                 ← **backend** — load-env.ts, app.ts, routes/, services/
 ├── packages/
-│   └── imessage-agent/  ← Photon agent; npm workspace: imessage-agent
+│   └── imessage-agent/  ← Photon agent; scan-all, notify-poll, recall / recall all
 ├── supabase/migrations/
 ├── vercel.json
-├── .env.example         ← API-oriented vars; agent has its own .env.example
+├── .env.example
 └── package.json         ← workspaces: packages/*
 ```
-
-**`.vercel/`** — local link to Vercel project (CLI); optional to commit for team alignment.
-
-**`.trae/`** — **gitignored** TRAE Solo scratch; do not treat as source of truth.
 
 **MVC mapping**
 
@@ -137,13 +144,14 @@ second-brain-recall/
 
 ## 6. Execution Rules for AI Agents
 
-1. Read **`docs/PROGRESS.md` first** — do not assume MiniMax, RAG, or `chat.db` exist until checked there.
+1. Read **`docs/PROGRESS.md` first** — do not assume features exist until verified there.
 2. **Before writing code:** read this file and **`docs/PROGRESS.md`** (live state, blockers, next task).
 3. **After a merge-worthy milestone:** update **`docs/PROGRESS.md`** (done / in progress / blocked).
 4. Keep route handlers thin; services own orchestration.
 5. Prefer **structured LLM outputs** when extracting facts for storage.
 6. **No secrets in Git** — env only; rotate leaked keys before public repo.
 7. Prefer **small, shippable steps** over features that depend on non-existent consumer APIs.
+8. **Reconcile migrations** before applying blindly — see **`PROGRESS.md`** if duplicate version numbers or experimental SQL exist.
 
 ---
 
@@ -154,6 +162,7 @@ These are validated ideas parked for post-MVP iteration:
 * **"Catch me up"** — user returns to a noisy thread; agent summarizes what they missed + next steps, with source citations.
 * **"Export and execute"** — structured output (tasks, decisions, owners) → Notion and/or copy-friendly formats.
 * **Source citations** — `sources[]` array in extraction output linking back to original message excerpts.
+* **True push from cloud → Mac** — WebSocket / APNs bridge (only if product needs instant server-initiated delivery without polling).
 
 ---
 

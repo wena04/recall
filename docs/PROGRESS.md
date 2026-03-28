@@ -1,26 +1,28 @@
 # PROGRESS.md — Current state (living document)
 
-**Last updated:** 2026-03-29  
+**Last updated:** 2026-03-28  
 **Package name:** `second-brain-recall` (root `package.json`)
 
 > Update this file after every merge-worthy milestone. **Accuracy over optimism.**
 
 **Read first for coding:** this file. **Read for product contract:** `GOAL.md`.
 
-**Where code lives:** **Frontend** → **`web/`** · **Backend** → **`api/`** (split client/server; MVC-style layering inside `api/` — thin `routes/`, logic in `services/`).
+**Where code lives:** **Frontend** → **`web/`** · **Backend** → **`api/`** (thin `routes/`, logic in `services/`).
 
 ---
 
 ## Alignment
 
-**North Star:** `docs/GOAL.md` — **Autonomous Background Brain** (omni-channel ingest → Bento dashboard → optional pings + Mirror Memory).
+**North Star:** `docs/GOAL.md` — **Autonomous Background Brain** (ingest → dashboard → location-tagged recommendations → iMessage via Photon poll → Mirror Memory chat).
 
-**Current code path:**
+**Primary paths:**
 
-1. **Web:** **`/connect`** — paste / `.txt` / simulated samples → **`POST /api/message`** → MiniMax → **`knowledge_items`** (+ optional Notion).
-2. **Photon (macOS):** **`packages/imessage-agent`** — watch iMessage → trigger word (`recall`) → **`getMessages`** scoped by **`chatId`** → same **`POST /api/message`** with **`chat_label`** + **`ingest_note`** → MiniMax structured JSON (**`persona`**, **`recall_enrichment`**) → reply in-thread with summary when ingest succeeds.
+1. **Web `/connect`** — paste / samples / `.txt` → **`POST /api/message`** → MiniMax → **`knowledge_items`** (+ optional Notion).
+2. **Photon** — **`recall`** (per thread) or **`recall all`** (multi-chat, gated by env) → same **`POST /api/message`** with **`chat_label`** / **`ingest_note`** → iMessage reply when ingest succeeds.
+3. **Dashboard** — **`GET /api/knowledge_items/:userId`**, **Digital diet** (Recharts), **Mirror Memory** → **`POST /api/query`**; optional **`useLocationReporter`** → **`POST /api/location`** when notifications not **off**.
+4. **Mac + Photon** — **`npm run agent:notify-poll`** polls **`GET /api/notifications/pending/:userId`**, sends iMessage, **`POST .../ack`**.
 
-**Product language:** ingestion stores **structured memory** for retrieval / future prompts (RAG-style). It is **not** fine-tuning MiniMax weights on the database.
+**Product language:** inference + storage for retrieval in prompts — **not** fine-tuning MiniMax on the database.
 
 ---
 
@@ -28,46 +30,48 @@
 
 ### Web — `web/`
 
-- [x] Vite + React + TypeScript + Tailwind (`vite.config.ts` sets `root` to `web/`, build output to repo `dist/`)
-- [x] Routes: Landing, Login, **`/connect`** (source picker + multiline ingest), Dashboard
-- [x] Supabase Auth (client); dev bypass via **`VITE_DEV_BYPASS_AUTH`** + **`VITE_DEV_USER_ID`**
-- [x] Ingest: `POST /api/message` with `content` + `source_type`; optional **`image_base64`** + **`mime_type`** (Vision — **API/scripts only**, no image upload in `/connect` UI); list via **`GET /api/knowledge_items/:userId`**
-- [x] Settings (Radix): Notion token + database ID on `users`
+- [x] Vite + React + TypeScript + Tailwind; build → repo **`dist/`**
+- [x] Routes: Landing, Login, **`/connect`**, Dashboard
+- [x] Supabase Auth; dev bypass **`VITE_DEV_BYPASS_AUTH`** + **`VITE_DEV_USER_ID`**
+- [x] Ingest via **`POST /api/message`**; list via **`GET /api/knowledge_items/:userId`**
+- [x] **Settings** (Radix): Notion + **notification frequency** + **`notification_imessage_to`** (Photon **`send`** target); **`users`** upsert on save
+- [x] **Digital diet** — Recharts pie/donut by **`category`** from loaded items
+- [x] **Memory cards** — summary, category, locations, persona, recall_enrichment, action items, expandable original/context
+- [x] **Mirror Memory Chatbot** (`Chatbot.tsx`) → **`POST /api/query`**
+- [x] **`useLocationReporter`** — ~5 min interval **`POST /api/location`** when frequency ≠ **off** (browser Geolocation; localhost or HTTPS)
 
 ### API — `api/`
 
-- [x] `app.ts` mounts routes; `server.ts` local dev (`PORT` default **3001**); **`index.ts`** Vercel serverless entry — types use **`express`** `Request`/`Response` (no **`@vercel/node`** package)
-- [x] **`POST /api/message`** — insert → **MiniMax** (`api/services/llm.ts`) → Zod **`extract.ts`** → update **`knowledge_items`** (`summary`, `category`, locations, `action_items`, `source_context`, **`persona`**, **`recall_enrichment`**) → optional Notion
-- [x] Optional body fields: **`chat_label`**, **`ingest_note`** (Photon / demo context for the model)
-- [x] Vision path: **`extractContentFromImage`** when `image_base64` + `mime_type` present
-- [x] `GET /api/knowledge_items/:userId` · `GET /api/health`
-- [x] `routes/auth.ts` — stubs only (TODO)
+- [x] **`api/load-env.ts`** — loads **repo-root** `.env` **first** in **`app.ts`** (fixes import order vs **`lib/supabase.ts`**)
+- [x] **`POST /api/message`** — MiniMax (`llm.ts`) + Zod **`extract.ts`** → **`knowledge_items`**; optional Notion
+- [x] Vision path: **`extractContentFromImage`** (`image_base64` + `mime_type`) — no image upload in `/connect` UI
+- [x] **`GET /api/knowledge_items/:userId`** · **`GET /api/health`**
+- [x] **`POST /api/query`** — **`services/rag.ts`**: retrieval + **`MINIMAX_RAG_MODEL`** (default **M2-her**-style id) via **`callMiniMaxTextCompletion`**
+- [x] **`POST /api/location`** — **`services/location_ping.ts`**: Nominatim reverse geocode, match memories by city/name, rate limits, optional **`MINIMAX_LOCATION_MODEL`** copy → **`notification_outbox`**
+- [x] **`GET /api/notifications/pending/:userId`** · **`POST /api/notifications/:id/ack`**
+- [x] **`routes/auth.ts`** — stubs (unused)
 
 ### Data — Supabase
 
-- [x] Migrations **`0000`**–**`0001`** — core **`users`**, **`knowledge_items`** + enriched columns
-- [x] **`0002_knowledge_items_persona.sql`** — **`persona` JSONB**
-- [x] **`0003_recall_enrichment.sql`** — **`recall_enrichment` JSONB** (apply on remote; Cursor **Supabase MCP** **`user-supabase`** used to run SQL on project **`kryrqcqpcxvevmbfuxiu`**)
+- [x] **`0000`**–**`0001`** — **`users`**, **`knowledge_items`** + enriched columns
+- [x] **`0002`** — **`persona` JSONB**
+- [x] **`0003`** — **`recall_enrichment` JSONB**
+- [x] **`0004_notification_location_outbox.sql`** — user location prefs + **`notification_outbox`**
+- [x] ⚠️ **Also in repo:** **`0004_add_notification_frequency_to_users.sql`** (narrow ALTER) and **`0005_add_location_notifications.sql`** (PostGIS **`location::geography`** on **`knowledge_items`** — **not** wired in app code; **may fail** if `location` / PostGIS absent). **Before `supabase db push`:** merge or drop conflicting files; **`location_ping`** uses **string** city matching only.
 
 ### iMessage — `packages/imessage-agent/`
 
-- [x] **`@photon-ai/imessage-kit`** — watch DM/group; **`getMessages({ chatId, limit, excludeOwnMessages: false, excludeReactions: true })`**; **`send`** via **`chatId`** (groups) or sender
-- [x] **`SECOND_BRAIN_*`** → **`ingestTranscriptToSecondBrain`** → **`POST /api/message`** with **`chat_label`** + **`ingest_note`**; response drives **`formatRecallImessageReply`** (MiniMax summary in iMessage when ingest OK)
-- [x] Env: **`RECALL_GROUP_NAME_CONTAINS`** (optional group-only filter), **`RECALL_DEMO_HINT`**, **`MAX_MESSAGES`** (default **400** in `.env.example`), **`CHAT_LABEL_REFRESH_MS`**, chat label cache from **`listChats`**
-- [x] **`packages/imessage-agent/README.md`** — setup, Full Disk Access (**Cursor.app**), troubleshooting **`chat.db`**
-- [x] **`agent:test:imessage`** — improved errors + **`formatChatLabel`** in test output
-- [x] Tests: **`npm run agent:test:imessage`**, `agent:test:send`, `agent:test:watch`, **`npm run agent:start`**
+- [x] Watch + **`recall`** / **`recall quick`**; ingest → **`ingestTranscriptToSecondBrain`**
+- [x] **`recall all`** when **`RECALL_SCAN_ALL_CHATS=true`** — **`scan-all-chats.ts`**
+- [x] **`npm run agent:scan-all`** — CLI multi-chat ingest (**`run-scan-all.ts`**); **`RECALL_SCAN_DEBUG`**
+- [x] **`npm run agent:notify-poll`** — **`run-notify-poll.ts`** delivers **`notification_outbox`** via Photon
+- [x] README: Full Disk Access, scan-all, notify-poll, env tables
 
-### Tooling / quality
+### Tooling / demo data
 
-- [x] Removed unused deps: **`openai`**, **`zustand`**, **`lucide-react`**; removed **`@vercel/node`** (audit clean after reinstall)
-- [x] ESLint ignores `packages/imessage-agent/**`
-- [x] `.vercelignore` excludes `packages/imessage-agent`
-- [x] Docs: **`GOAL.md`** + **`PROGRESS.md`** (+ **`data/README.md`** for data layout)
-
-### Scripts / data pipeline (see `data/README.md`)
-
-- [x] **`npm run ingest:local`**, **`ingest:parse-cn`**, **`ingest:seed`**, **`dev:ensure-user`**, **`dev:smoke-api`**, **`demo:load`**
+- [x] **`demo/sample_data.json`** — 21 rows, all five categories + optional persona/enrichment; **`data/fixtures/diverse_knowledge_items.json`** copy
+- [x] **`demo:load`** — optional **`FIXTURE_FILE=...`**
+- [x] **`ingest:local`**, **`ingest:parse-cn`**, **`ingest:seed`**, **`dev:ensure-user`**, **`dev:smoke-api`**
 
 ---
 
@@ -75,85 +79,85 @@
 
 | Gap | Notes |
 |-----|--------|
-| **Citations / RAG** | No chunk store or grounded Q&A over **`knowledge_items`** yet; stored rows are **retrieval-ready** for later Mirror Memory. |
-| **Vision UI** | **`/connect`** screenshot card is **text/caption** only; Vision via **API** (`image_base64` + `mime_type`). |
-| **Dashboard** | Lists items; **no** `recall_enrichment` / persona rich display yet; Bento / charts in **Suggested next tasks**. |
-| **Tone / “digital twin” profile** | **`texting_style`** in **`recall_enrichment`**; no dedicated **`users.tone_profile`** or MBTI field yet (pitch = inference + storage, not clinical typing). |
-| **Photon** | **macOS + Full Disk Access**; not deployable on Vercel (local agent). |
-| **Auth API** | `/api/auth/*` unused; session is Supabase client-side. |
-| **Secrets** | Rotate if **`.env`** ever committed; use **`.env.example`** as template only. |
+| **Photon chat RAG** | Mirror Memory is **Dashboard**-first; iMessage-native Q&A not wired. |
+| **Vision UI** | **`/connect`** screenshot path is caption/text only; Vision via API body fields. |
+| **Building-level / radius pings** | City + string match on **`location_*`** only; no lat/lng per memory in app logic. |
+| **Migration hygiene** | Duplicate **`0004_*`** and experimental **`0005`** (PostGIS) need team decision before clean **`db push`**. |
+| **RAG quality** | **`textSearch`** on **`summary`** may need DB extension / tuning; failures fall back to empty context. |
+| **`users.tone_profile`** | Not a dedicated column; style lives in **`recall_enrichment`** snippets. |
+| **Auth API** | `/api/auth/*` unused; **`POST /api/*`** not JWT-guarded — hackathon trust model. |
 
 ---
 
 ## Suggested next tasks (priority)
 
-1. **Dashboard** — show **`category`**, **`location_*`**, **`persona`**, **`recall_enrichment`** (keywords, courses, texting line) on cards.
-2. **Photon** — optional **`RECALL_SINCE_DAYS`** + **`getMessages({ since })`** for “recent thread only.”
-3. **Mirror / Decision Maker** — one **`POST /api/query`** (or similar) that retrieves top **`knowledge_items`** + injects **`recall_enrichment.texting_style`** into MiniMax (RAG prototype).
-4. **Demo video** — TRAE + MiniMax + (optional) Photon on Mac; honest data story.
-5. **`users` profile** — optional JSONB **`tone_profile`** (MBTI-inspired sketch, editable) aggregated from ingests.
+1. **Consolidate Supabase migrations** — single **`0004`** for notifications + remove or fix **`0005`** vs schema.
+2. **Secure APIs** — verify **`userId`** against Supabase session or signed token for **`/api/location`**, **`/api/query`**, **`/api/notifications/*`**.
+3. **RAG** — pg_trgm / embedding search; handle **`textSearch`** errors gracefully in UI.
+4. **Photon** — optional **`getMessages({ since })`**; pipe **`recall`** questions to **`/api/query`**.
+5. **Demo polish** — video, honest fixture vs live ingest story.
 
 ---
 
-## Team Split (Hackathon) — status snapshot
+## API contract (current)
 
-Historical checklist; many items are **done** in repo (MiniMax, Zod, migrations, `/connect`, agent → API).
+### `GET /api/knowledge_items/:userId`
 
-| Area | Status |
-|------|--------|
-| DB + extraction + **`POST /api/message`** | Done — see **Done** above |
-| Dashboard polish (Bento, charts, enrichment UI) | Open |
-| Mirror Memory widget | Stretch |
+Returns **`{ status: 'success', data: KnowledgeItem[] }`**. Shape includes **`persona`**, **`recall_enrichment`** JSONB when present.
+
+### `POST /api/message`
+
+Unchanged from prior contract: **`userId`**, **`type`**, **`content`**, optional **`source_type`**, **`chat_label`**, **`ingest_note`**, **`image_base64`**, **`mime_type`**.
+
+### `POST /api/query`
+
+```typescript
+{ userId: string; question: string }
+// → { answer: string }
+```
+
+### `POST /api/location`
+
+```typescript
+{ userId: string; lat: number; lng: number }
+// → { ok, skipped?, city?, matchingMemories?, queued?, outboxId? }
+```
+
+### `GET /api/notifications/pending/:userId`
+
+```typescript
+{ deliverTo: string | null; notifications: Array<{ id: string; body: string; created_at: string }> }
+```
+
+### `POST /api/notifications/:id/ack`
+
+```typescript
+{ userId: string } // body
+// → { ok: true }
+```
 
 ---
 
-## API Contract (current)
+## Model env (reference)
 
-### `GET /api/knowledge_items/:userId` — item shape
+| Variable | Role |
+|----------|------|
+| **`MINIMAX_MODEL`** | Ingest extraction (Anthropic Messages) — default **MiniMax-M2.7** |
+| **`MINIMAX_RAG_MODEL`** | **`/api/query`** — default **M2-her** |
+| **`MINIMAX_LOCATION_MODEL`** | Location ping body — defaults to **`MINIMAX_MODEL`** |
+| **`MINIMAX_LEGACY_MODEL`** | Vision native **`chatcompletion_v2`** |
 
-```typescript
-interface KnowledgeItem {
-  id: string;
-  user_id?: string;
-  original_content_url: string;
-  summary: string;
-  category: string | null;
-  location_city: string | null;
-  location_name: string | null;
-  action_items: { task: string; owner: string }[];
-  source_context: string | null;
-  source_type: string | null;
-  persona: Record<string, unknown> | null;       // JSONB — optional
-  recall_enrichment: Record<string, unknown> | null; // JSONB — optional
-  notion_page_id: string | null;
-  created_at: string;
-}
-```
-
-### `POST /api/message` — request body
-
-```typescript
-interface MessageRequest {
-  userId: string;
-  type: string;
-  content: string;
-  source_type?: 'text' | 'url' | 'chat_export' | 'image' | 'rednote' | 'tiktok';
-  chat_label?: string;      // e.g. group display name (Photon)
-  ingest_note?: string;     // extra context for MiniMax (demo hints)
-  image_base64?: string;    // Vision
-  mime_type?: string;       // image/png, image/jpeg, …
-}
-```
+See **`.env.example`** and [Anthropic-compatible MiniMax docs](https://platform.minimax.io/docs/api-reference/text-anthropic-api).
 
 ---
 
 ## Environment variables
 
-**Root** — see **`.env.example`**: **MiniMax**, **Supabase** (`SUPABASE_*`, `VITE_SUPABASE_*`), optional **`PORT`**, dev bypass.
+**Root `.env`:** MiniMax, Supabase server + Vite, **`PORT`**, dev bypass.
 
-**Agent** — **`packages/imessage-agent/.env`**: **`RECALL_TRIGGER`**, **`MAX_MESSAGES`**, **`RECALL_GROUP_NAME_CONTAINS`**, **`RECALL_DEMO_HINT`**, **`SECOND_BRAIN_API_URL`**, **`SECOND_BRAIN_USER_ID`**, **`SECOND_BRAIN_INGEST_ON_RECALL`**.
+**Agent `packages/imessage-agent/.env`:** **`SECOND_BRAIN_*`**, **`RECALL_*`**, **`NOTIFY_POLL_INTERVAL_MS`**, **`RECALL_SCAN_ALL_CHATS`**, **`RECALL_SCAN_DEBUG`**, etc.
 
-**Vercel:** mirror root env vars for the deployed API + static site.
+**Vercel:** mirror root vars; **`agent:notify-poll`** on Mac should point **`SECOND_BRAIN_API_URL`** at deployed API if applicable.
 
 ---
 
@@ -162,15 +166,18 @@ interface MessageRequest {
 ```bash
 npm install
 cp .env.example .env
-npm run dev                   # Vite :5173 + Express :3001
+npm run dev
 
-# macOS — Photon (see packages/imessage-agent/README.md)
-cp packages/imessage-agent/.env.example packages/imessage-agent/.env
-npm run agent:test:imessage
+USER_ID=<uuid> npm run demo:load
+FIXTURE_FILE=./data/fixtures/diverse_knowledge_items.json USER_ID=<uuid> npm run demo:load
+
+# macOS — Photon
 npm run agent:start
+npm run agent:scan-all
+npm run agent:notify-poll
 ```
 
-Other: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run ingest:local`**, **`npm run demo:load`**.
+Also: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run ingest:local`**.
 
 ---
 
@@ -178,18 +185,12 @@ Other: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run 
 
 | Topic | Status | Notes |
 |-------|--------|--------|
-| MiniMax model name | Text: **`MINIMAX_MODEL`** (default **`MiniMax-M2.7`**) via Anthropic Messages API; vision: **`MINIMAX_LEGACY_MODEL`** + native **`chatcompletion_v2`** | See [Anthropic-compatible API](https://platform.minimax.io/docs/api-reference/text-anthropic-api) |
-| Link `imessage_id` to users | Open | Column exists |
-| Product name | Open | Align pitch deck |
+| MiniMax | Text/RAG via **`api.minimax.io/anthropic`** + **`x-api-key`**; vision via legacy host | Token Plan **`sk-cp-*`** vs **`sk-api-*`** per account docs |
+| **`imessage_id` on `users`** | Open | Column exists; not wired to notify target |
+| Product name | Open | Align deck |
 
 ---
 
 ## Changelog
 
-- **2026-03-29** — **PROGRESS sweep for GitHub push:** consolidated **Done** (Photon ↔ API, **`recall_enrichment`**, **`chat_label`/`ingest_note`**, migrations, MCP note, removed stale **`chat.db` / team-task** contradictions); refreshed **gaps**, **API contract**, **next tasks**; clarified **retrieval vs training** in alignment.
-- **2026-03-28** — **Recall pipeline:** MiniMax **`recall_enrichment`**; **`POST /api/message`** **`chat_label`**, **`ingest_note`**; Photon **group filter**, **`RECALL_DEMO_HINT`**; migration **`0003`**. 
-- **2026-03-28** — **Deps:** removed **`@vercel/node`**, **`openai`**, **`zustand`**, **`lucide-react`**; **`api/index.ts`** uses Express types.
-- **2026-03-28** — **Photon agent:** **`chatId`**-scoped **`getMessages`**; **`packages/imessage-agent/README.md`**; Full Disk Access notes (**Cursor.app**).
-- **2026-03-28** — **Docs:** frontend **`web/`** / backend **`api/`** naming in **GOAL** + **PROGRESS**.
-- **2026-03-28** — **Vision + persona (API):** `image_base64` + `mime_type`; **`persona`** column **`0002`**.
-- **2026-03-28** — **`/connect`**, **`data/README.md`**, **`ingest:local`**, **`ingest:seed`**, CN parser, rednote/tiktok cards.
+- **2026-03-28** — **`GOAL.md`** / **`PROGRESS.md`** aligned with repo: **`api/load-env`**, Dashboard **Digital diet** + **Mirror Memory** → **`POST /api/query`**, **`POST /api/location`** + **`notification_outbox`** + **`agent:notify-poll`**, **`recall all`** / **`agent:scan-all`** + **`RECALL_SCAN_DEBUG`**, diverse **`demo:load`** fixtures, multi-model env table; noted duplicate **`0004_*`** migrations and experimental **`0005`** (PostGIS) vs app behavior.
