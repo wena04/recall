@@ -16,6 +16,17 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import Chatbot from "@/components/Chatbot";
 import LocationTracker from "@/components/LocationTracker";
+import {
+  PiBowlFood,
+  PiCalendar,
+  PiConfetti,
+  PiGameController,
+  PiHeartbeat,
+  PiLightbulb,
+  PiNewspaper,
+  PiAirplaneTilt,
+  PiBookOpen,
+} from "react-icons/pi";
 
 interface PersonaShape {
   chat_role?: string;
@@ -50,6 +61,7 @@ interface SectionItem {
   id: string;
   title: string;
   helper: string;
+  icon: React.ElementType;
 }
 
 /** Matches MiniMax extraction categories + fallback for empty. */
@@ -63,21 +75,53 @@ const CATEGORY_CHART_COLORS: Record<string, string> = {
 };
 
 const SECTION_ITEMS: SectionItem[] = [
-  { id: "food", title: "Food", helper: "Cafes, boba, and places to eat." },
-  { id: "events", title: "Events", helper: "Concerts, meetups, and plans." },
-  { id: "sports", title: "Sports", helper: "Games, training, and activities." },
-  { id: "ideas", title: "Ideas", helper: "Concepts, drafts, and inspiration." },
-  { id: "medical", title: "Medical", helper: "Health notes and reminders." },
-  { id: "news", title: "News", helper: "Articles and timely updates." },
+  {
+    id: "food",
+    title: "Food",
+    helper: "Cafes, boba, and places to eat.",
+    icon: PiBowlFood,
+  },
+  {
+    id: "events",
+    title: "Events",
+    helper: "Concerts, meetups, and plans.",
+    icon: PiConfetti,
+  },
+  {
+    id: "sports",
+    title: "Sports",
+    helper: "Games, training, and activities.",
+    icon: PiGameController,
+  },
+  {
+    id: "ideas",
+    title: "Ideas",
+    helper: "Concepts, drafts, and inspiration.",
+    icon: PiLightbulb,
+  },
+  {
+    id: "medical",
+    title: "Medical",
+    helper: "Health notes and reminders.",
+    icon: PiHeartbeat,
+  },
+  {
+    id: "news",
+    title: "News",
+    helper: "Articles and timely updates.",
+    icon: PiNewspaper,
+  },
   {
     id: "travel",
     title: "Travel",
     helper: "Trips, cities, and destination notes.",
+    icon: PiAirplaneTilt,
   },
   {
     id: "knowledge",
     title: "Knowledge",
     helper: "Learning snippets and references.",
+    icon: PiBookOpen,
   },
 ];
 
@@ -213,15 +257,21 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {SECTION_ITEMS.map((section) => {
               const count = itemsByCategory(section.title).length;
+              const Icon = section.icon;
               return (
                 <div
                   key={section.id}
-                  className="flex min-h-56 flex-col justify-between rounded-2xl border border-violet-100 bg-violet-50/35 p-4 text-left"
+                  className="group flex min-h-56 flex-col justify-between rounded-2xl border border-violet-100 bg-violet-50/35 p-4 text-left transition-all hover:border-violet-200 hover:bg-violet-50/60"
                 >
                   <div>
-                    <p className="text-base font-semibold text-stone-900">
-                      {section.title}
-                    </p>
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 ring-1 ring-violet-100">
+                        <Icon className="h-5 w-5 text-violet-600" />
+                      </div>
+                      <p className="text-base font-semibold text-stone-900">
+                        {section.title}
+                      </p>
+                    </div>
                     <p className="mt-1 text-xs leading-relaxed text-stone-500">
                       {section.helper}
                     </p>
@@ -229,7 +279,7 @@ export default function Dashboard() {
                   <div className="mt-5">
                     <StatusBadge
                       tone={count > 0 ? "emerald" : "stone"}
-                      className="normal-case tracking-normal"
+                      className="normal-case tracking-normal transition-colors group-hover:border-violet-200/80 group-hover:bg-white/90"
                     >
                       {count > 0 ? `${count} saved` : "Empty"}
                     </StatusBadge>
