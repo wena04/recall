@@ -10,7 +10,8 @@
     "dev": "tsx watch src/index.ts",
     "test:imessage": "tsx test/test-read.ts",
     "test:send": "tsx test/test-send.ts",
-    "test:watch": "tsx test/test-watch.ts"
+    "test:watch": "tsx test/test-watch.ts",
+    "scan-all": "tsx src/run-scan-all.ts"
   },
   "dependencies": {
     "@photon-ai/imessage-kit": "latest",

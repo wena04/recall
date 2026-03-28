@@ -178,7 +178,7 @@ Other: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run 
 
 | Topic | Status | Notes |
 |-------|--------|--------|
-| MiniMax model name | `MiniMax-Text-01` in `llm.ts` | Can swap if account supports other text models |
+| MiniMax model name | Text: **`MINIMAX_MODEL`** (default **`MiniMax-M2.7`**) via Anthropic Messages API; vision: **`MINIMAX_LEGACY_MODEL`** + native **`chatcompletion_v2`** | See [Anthropic-compatible API](https://platform.minimax.io/docs/api-reference/text-anthropic-api) |
 | Link `imessage_id` to users | Open | Column exists |
 | Product name | Open | Align pitch deck |
 

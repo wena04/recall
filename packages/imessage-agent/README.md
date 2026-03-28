@@ -74,12 +74,29 @@ npm run dev
 npm run agent:start
 ```
 
+### Multi-chat ingest without iMessage (testing / backfill)
+
+Same pipeline as typing **`recall all`** in a thread, but runs once from the terminal and exits (good for populating the DB).
+
+**Terminal A:** `npm run dev` (API must be reachable).
+
+**Terminal B (macOS, Full Disk Access):**
+
+```bash
+npm run agent:scan-all
+```
+
+Uses `SECOND_BRAIN_API_URL`, `SECOND_BRAIN_USER_ID`, and optional `RECALL_MAX_CHATS_SCAN`, `RECALL_MESSAGES_PER_CHAT_SCAN`, `RECALL_INGEST_DELAY_MS`, `RECALL_GROUP_NAME_CONTAINS`, `RECALL_DEMO_HINT` from **`packages/imessage-agent/.env`** (repo root `.env` is also loaded first for shared vars).
+
+**Debug empty scans:** set `RECALL_SCAN_DEBUG=true` to log each thread’s `getMessages` raw count, how many have non-empty `text`, and why a row was skipped (same env works for iMessage **`recall all`**).
+
 ## 5. Trigger from iPhone or Mac Messages
 
 In the **same chat** where you messaged the bot, send a message containing the trigger, e.g.:
 
 - `recall` — full stub summary + optional ingest  
 - `recall quick` — shorter TLDR (see `ai-stub.ts`)
+- `recall all` — **optional** multi-chat scan: with `RECALL_SCAN_ALL_CHATS=true`, walks up to `RECALL_MAX_CHATS_SCAN` threads (recent-first), pulls `RECALL_MESSAGES_PER_CHAT_SCAN` messages per thread, and calls **`POST /api/message` once per thread** so Supabase gets **multiple rows** (different dominant categories per chat). Uses `RECALL_GROUP_NAME_CONTAINS` the same way as single-thread recall when set.
 
 The agent loads history **for that conversation** (`chatId` from Photon), not unrelated global traffic.
 

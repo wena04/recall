@@ -1,6 +1,6 @@
-import 'dotenv/config';
 /**
  * local server entry file, for local development
+ * (dotenv is configured in app.ts with repo-root `.env` path)
  */
 import app from './app.js';
 

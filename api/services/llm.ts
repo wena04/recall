@@ -1,8 +1,23 @@
-import { parseExtraction, type ExtractionResult } from './extract.js';
+import { parseExtraction, type ExtractionResult } from "./extract.js";
 
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
 const MINIMAX_GROUP_ID = process.env.MINIMAX_GROUP_ID;
-const MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL ?? 'https://api.minimax.chat/v1';
+
+/** Anthropic-compatible base (text). Default: https://platform.minimax.io/docs/api-reference/text-anthropic-api */
+const MINIMAX_ANTHROPIC_BASE_URL =
+  process.env.MINIMAX_ANTHROPIC_BASE_URL ?? "https://api.minimax.io/anthropic";
+
+/** Text model for Anthropic Messages API (M2.x family). */
+const MINIMAX_MODEL = process.env.MINIMAX_MODEL ?? "MiniMax-M2.7";
+
+/** Native MiniMax chat completion host (vision + optional legacy). Falls back to legacy `MINIMAX_BASE_URL` if set. */
+const MINIMAX_LEGACY_BASE_URL =
+  process.env.MINIMAX_LEGACY_BASE_URL ??
+  process.env.MINIMAX_BASE_URL ??
+  "https://api.minimax.io/v1";
+
+/** Model for native /text/chatcompletion_v2 (multimodal). */
+const MINIMAX_LEGACY_MODEL = process.env.MINIMAX_LEGACY_MODEL ?? MINIMAX_MODEL;
 
 const JSON_RULES = `"persona" is either null or an object:
   { "chat_role": "short label e.g. friend, group chat, customer service, official account, bot-like assistant",
@@ -80,43 +95,191 @@ function parseJsonFromModelContent(raw: string): unknown {
   return JSON.parse(trimmed);
 }
 
-function chatCompletionUrl(): string {
+function chatCompletionV2Url(): string {
+  const base = MINIMAX_LEGACY_BASE_URL.replace(/\/$/, "");
   return MINIMAX_GROUP_ID
-    ? `${MINIMAX_BASE_URL}/text/chatcompletion_v2?GroupId=${MINIMAX_GROUP_ID}`
-    : `${MINIMAX_BASE_URL}/text/chatcompletion_v2`;
+    ? `${base}/text/chatcompletion_v2?GroupId=${MINIMAX_GROUP_ID}`
+    : `${base}/text/chatcompletion_v2`;
 }
 
-async function callMiniMax(
-  messages: Array<{ role: string; content: string | unknown[] }>,
-): Promise<string> {
-  if (!MINIMAX_API_KEY) {
-    throw new Error('MINIMAX_API_KEY is not set');
+/** MiniMax native chat completion: OpenAI-like `choices` + optional `base_resp`. */
+function extractTextFromChatCompletionBody(data: unknown): string {
+  if (!data || typeof data !== "object") {
+    throw new Error("MiniMax: empty or invalid JSON body");
+  }
+  const d = data as Record<string, unknown>;
+  const baseResp = d.base_resp as
+    | { status_code?: number; status_msg?: string }
+    | undefined;
+  if (
+    baseResp &&
+    typeof baseResp.status_code === "number" &&
+    baseResp.status_code !== 0
+  ) {
+    throw new Error(
+      `MiniMax base_resp: ${baseResp.status_code} ${baseResp.status_msg ?? ""}`.trim(),
+    );
   }
 
-  const response = await fetch(chatCompletionUrl(), {
-    method: 'POST',
+  const choices = d.choices as
+    | Array<{
+        message?: { content?: string };
+        delta?: { content?: string };
+      }>
+    | undefined;
+
+  const first = choices?.[0];
+  const fromMessage = first?.message?.content;
+  const fromDelta = first?.delta?.content;
+  const text =
+    typeof fromMessage === "string"
+      ? fromMessage
+      : typeof fromDelta === "string"
+        ? fromDelta
+        : null;
+
+  if (text !== null && text.length > 0) {
+    return text;
+  }
+
+  const reply = d.reply;
+  if (typeof reply === "string" && reply.length > 0) {
+    return reply;
+  }
+
+  throw new Error(
+    `MiniMax: could not parse assistant text (no choices[0].message.content). Keys: ${Object.keys(d).join(", ")}`,
+  );
+}
+
+/** Anthropic Messages API shape returned by MiniMax compatibility layer. */
+function extractTextFromAnthropicMessageBody(data: unknown): string {
+  if (!data || typeof data !== "object") {
+    throw new Error("MiniMax Anthropic: empty or invalid JSON body");
+  }
+  const d = data as Record<string, unknown>;
+  const content = d.content as
+    | Array<{ type?: string; text?: string }>
+    | undefined;
+  if (!Array.isArray(content)) {
+    throw new Error(
+      `MiniMax Anthropic: expected content[]; got ${JSON.stringify(data).slice(0, 400)}`,
+    );
+  }
+  const parts = content
+    .filter((b) => b && b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text as string);
+  if (parts.length === 0) {
+    throw new Error("MiniMax Anthropic: no text blocks in content[]");
+  }
+  return parts.join("");
+}
+
+/**
+ * Text extraction via Anthropic-compatible Messages API (recommended for M2.x).
+ * @see https://platform.minimax.io/docs/api-reference/text-anthropic-api
+ */
+async function callMiniMaxAnthropicMessages(userText: string): Promise<string> {
+  return await callMiniMaxTextCompletion(userText, SYSTEM_PROMPT);
+}
+
+/**
+ * Generic text completion via Anthropic-compatible Messages API.
+ * @see https://platform.minimax.io/docs/api-reference/text-anthropic-api
+ */
+export async function callMiniMaxTextCompletion(
+  userText: string,
+  systemPrompt: string,
+): Promise<string> {
+  if (!MINIMAX_API_KEY) {
+    throw new Error("MINIMAX_API_KEY is not set");
+  }
+
+  const url = `${MINIMAX_ANTHROPIC_BASE_URL.replace(/\/$/, "")}/v1/messages`;
+
+  const response = await fetch(url, {
+    method: "POST",
     headers: {
-      Authorization: `Bearer ${MINIMAX_API_KEY}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
+      "x-api-key": MINIMAX_API_KEY,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: 'MiniMax-Text-01',
-      messages,
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
+      model: MINIMAX_MODEL,
+      max_tokens: 8192,
+      temperature: 0.2,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: userText }],
+        },
+      ],
     }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`MiniMax API error: ${response.status} ${errorText}`);
+  const rawText = await response.text();
+  let data: unknown;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    throw new Error(
+      `MiniMax Anthropic: non-JSON response (${response.status}): ${rawText.slice(0, 500)}`,
+    );
   }
 
-  const data = (await response.json()) as {
-    choices: Array<{ message: { content: string } }>;
-  };
+  if (!response.ok) {
+    const msg =
+      data && typeof data === "object" && "error" in data
+        ? JSON.stringify((data as { error?: unknown }).error)
+        : rawText.slice(0, 500);
+    throw new Error(`MiniMax Anthropic HTTP ${response.status}: ${msg}`);
+  }
 
-  return data.choices[0].message.content;
+  return extractTextFromAnthropicMessageBody(data);
+}
+
+/**
+ * Native chatcompletion_v2 (used for vision; Anthropic compat does not support images yet).
+ */
+async function callMiniMaxChatCompletionV2(
+  messages: Array<{ role: string; content: string | unknown[] }>,
+): Promise<string> {
+  if (!MINIMAX_API_KEY) {
+    throw new Error("MINIMAX_API_KEY is not set");
+  }
+
+  const response = await fetch(chatCompletionV2Url(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${MINIMAX_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MINIMAX_LEGACY_MODEL,
+      messages,
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    }),
+  });
+
+  const rawText = await response.text();
+  let data: unknown;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    throw new Error(
+      `MiniMax: non-JSON response (${response.status}): ${rawText.slice(0, 500)}`,
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `MiniMax API error: ${response.status} ${rawText.slice(0, 500)}`,
+    );
+  }
+
+  return extractTextFromChatCompletionBody(data);
 }
 
 export async function extractContent(
@@ -124,7 +287,7 @@ export async function extractContent(
   options?: { userPreamble?: string },
 ): Promise<ExtractionResult | null> {
   if (!MINIMAX_API_KEY) {
-    console.error('MINIMAX_API_KEY is not set');
+    console.error("MINIMAX_API_KEY is not set");
     return null;
   }
 
@@ -133,14 +296,11 @@ export async function extractContent(
     : content;
 
   try {
-    const raw = await callMiniMax([
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPayload },
-    ]);
+    const raw = await callMiniMaxAnthropicMessages(userPayload);
     const parsed = parseJsonFromModelContent(raw);
     return parseExtraction(parsed);
   } catch (error) {
-    console.error('Error calling MiniMax API:', error);
+    console.error("Error calling MiniMax API:", error);
     return null;
   }
 }
@@ -151,7 +311,7 @@ export async function extractContentFromImage(params: {
   caption?: string;
 }): Promise<ExtractionResult | null> {
   if (!MINIMAX_API_KEY) {
-    console.error('MINIMAX_API_KEY is not set');
+    console.error("MINIMAX_API_KEY is not set");
     return null;
   }
 
@@ -159,29 +319,32 @@ export async function extractContentFromImage(params: {
   const dataUrl = `data:${mimeType};base64,${imageBase64}`;
 
   const textPart =
-    caption?.trim() ??
-    'No extra caption; infer everything from the image.';
+    caption?.trim() ?? "No extra caption; infer everything from the image.";
 
-  const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+  const userContent: Array<{
+    type: string;
+    text?: string;
+    image_url?: { url: string };
+  }> = [
     {
-      type: 'text',
+      type: "text",
       text: `User caption (may be empty): ${textPart}`,
     },
     {
-      type: 'image_url',
+      type: "image_url",
       image_url: { url: dataUrl },
     },
   ];
 
   try {
-    const raw = await callMiniMax([
-      { role: 'system', content: VISION_SYSTEM_PROMPT },
-      { role: 'user', content: userContent },
+    const raw = await callMiniMaxChatCompletionV2([
+      { role: "system", content: VISION_SYSTEM_PROMPT },
+      { role: "user", content: userContent },
     ]);
     const parsed = parseJsonFromModelContent(raw);
     return parseExtraction(parsed);
   } catch (error) {
-    console.error('Error calling MiniMax Vision API:', error);
+    console.error("Error calling MiniMax Vision API:", error);
     return null;
   }
 }

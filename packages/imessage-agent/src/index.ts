@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { IMessageSDK } from '@photon-ai/imessage-kit';
 import { formatRecallImessageReply, processRecall } from './ai-stub.js';
 import { ingestTranscriptToSecondBrain } from './ingest-api.js';
+import { scanAllChatsAndIngest } from './scan-all-chats.js';
 
 // ─── Config ──────────────────────────────────────────────
 const TRIGGER = (process.env.RECALL_TRIGGER || 'recall').toLowerCase();
@@ -20,6 +21,13 @@ const GROUP_PATTERNS = RECALL_GROUP_NAME_CONTAINS.split(',')
 const RECALL_DEMO_HINT = process.env.RECALL_DEMO_HINT?.trim() || '';
 
 const CHAT_LABEL_REFRESH_MS = parseInt(process.env.CHAT_LABEL_REFRESH_MS || '300000', 10);
+
+/** `recall all` — scan up to N chats (separate Second Brain rows). Off unless RECALL_SCAN_ALL_CHATS=true */
+const RECALL_SCAN_ALL_CHATS =
+  process.env.RECALL_SCAN_ALL_CHATS === '1' || process.env.RECALL_SCAN_ALL_CHATS === 'true';
+const RECALL_MAX_CHATS_SCAN = parseInt(process.env.RECALL_MAX_CHATS_SCAN || '15', 10);
+const RECALL_MESSAGES_PER_CHAT_SCAN = parseInt(process.env.RECALL_MESSAGES_PER_CHAT_SCAN || '120', 10);
+const RECALL_INGEST_DELAY_MS = parseInt(process.env.RECALL_INGEST_DELAY_MS || '1500', 10);
 
 // ─── Init ────────────────────────────────────────────────
 const sdk = new IMessageSDK({ debug: true });
@@ -87,9 +95,61 @@ function replyTarget(message: { chatId?: string; sender?: string }): string {
 }
 
 // ─── Core Handler ────────────────────────────────────────
+const RECALL_ALL_RE = /\brecall\s+all\b/;
+
 async function handleMessage(message: any, isGroup: boolean) {
   const text = (message.text || '').toLowerCase().trim();
   if (!text.includes(TRIGGER)) return;
+
+  /** Multi-chat ingest: one API row per thread → multiple categories possible across DB. */
+  if (RECALL_ALL_RE.test(text)) {
+    if (!RECALL_SCAN_ALL_CHATS) {
+      await sdk.send(
+        replyTarget(message),
+        '🧠 Multi-chat scan is off. Set RECALL_SCAN_ALL_CHATS=true in packages/imessage-agent/.env, then say "recall all" again.',
+      );
+      return;
+    }
+    if (
+      !INGEST_BEFORE_RECALL ||
+      !process.env.SECOND_BRAIN_API_URL ||
+      !process.env.SECOND_BRAIN_USER_ID
+    ) {
+      await sdk.send(
+        replyTarget(message),
+        '⚠️ Enable SECOND_BRAIN_INGEST_ON_RECALL + SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID for multi-chat ingest.',
+      );
+      return;
+    }
+    const to = replyTarget(message);
+    await sdk.send(to, `🧠 Scanning up to ${RECALL_MAX_CHATS_SCAN} chats (this may take a few minutes)...`);
+    try {
+      const result = await scanAllChatsAndIngest(sdk, {
+        maxChats: RECALL_MAX_CHATS_SCAN,
+        messagesPerChat: RECALL_MESSAGES_PER_CHAT_SCAN,
+        delayMs: RECALL_INGEST_DELAY_MS,
+        demoHint: RECALL_DEMO_HINT || undefined,
+      });
+      const errTail =
+        result.errors.length > 0 ? `\n\nErrors (first 3):\n${result.errors.slice(0, 3).join('\n')}` : '';
+      await sdk.send(
+        to,
+        [
+          '✅ Multi-chat ingest done',
+          `Scanned: ${result.scanned} threads`,
+          `Saved to Second Brain: ${result.ingested}`,
+          `Skipped empty: ${result.skippedEmpty} · Failed: ${result.failed}`,
+          errTail,
+        ].join('\n'),
+      );
+    } catch (e) {
+      await sdk.send(
+        to,
+        `😅 Scan failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    return;
+  }
 
   if (GROUP_PATTERNS.length > 0) {
     if (!isGroup || !message.chatId) return;
@@ -194,6 +254,9 @@ await sdk.startWatching({
 console.log('🟢 Recall is live!');
 console.log(`   "${TRIGGER}"       → summarize + save (if ingest on)`);
 console.log(`   "${TRIGGER} quick" → shorter iMessage reply`);
+if (RECALL_SCAN_ALL_CHATS) {
+  console.log(`   "recall all"       → scan up to ${RECALL_MAX_CHATS_SCAN} chats → one ingest per thread`);
+}
 console.log('   Ctrl+C to stop\n');
 
 process.on('SIGINT', async () => {
