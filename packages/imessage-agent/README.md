@@ -47,9 +47,10 @@ cp packages/imessage-agent/.env.example packages/imessage-agent/.env
 | `RECALL_GROUP_NAME_CONTAINS` | Optional. Comma-separated substrings; if set, **only group chats** whose **display name** matches respond (e.g. `INFO 340,INFO 330`). Empty = any DM/group. |
 | `RECALL_DEMO_HINT` | Extra context sent to MiniMax (course names, demo story). |
 | `CHAT_LABEL_REFRESH_MS` | How often to refresh `listChats` cache (default `300000`). |
-| `SECOND_BRAIN_INGEST_ON_RECALL` | `true` → transcript → **MiniMax** → **Supabase**; iMessage reply uses that summary + keywords/style. |
-| `SECOND_BRAIN_API_URL` | e.g. `http://localhost:3001` (API must be running). |
+| `SECOND_BRAIN_INGEST_ON_RECALL` | `true` → transcript → **MiniMax** → **Supabase** in the **background** (same as `/connect`). |
+| `SECOND_BRAIN_API_URL` | e.g. `http://localhost:3001` (API must be running — used for **`POST /api/query`** Mirror Memory + ingest). |
 | `SECOND_BRAIN_USER_ID` | Supabase **`auth.users.id`** UUID (same user as the web app / `VITE_DEV_USER_ID` in dev bypass). |
+| `RECALL_THREAD_CONTEXT_LINES` | Optional. Append last **N** lines of this thread to the Mirror Memory question (default `25`). `0` = off. |
 
 **Not “training” models:** each ingest runs **inference** and stores structured rows (`summary`, `persona`, `recall_enrichment` JSON). You can later **retrieve** those rows into prompts (RAG-style)—that is not fine-tuning MiniMax on your DB.
 
@@ -104,8 +105,8 @@ Uses `SECOND_BRAIN_API_URL`, `SECOND_BRAIN_USER_ID`, optional `NOTIFY_POLL_INTER
 
 In the **same chat** where you messaged the bot, send a message containing the trigger, e.g.:
 
-- `recall` — full stub summary + optional ingest  
-- `recall quick` — shorter TLDR (see `ai-stub.ts`)
+- `recall` — **Mirror Memory** (`POST /api/query`, same RAG + persona as the Dashboard). Text after `recall` is your question; bare `recall` asks what’s most relevant from saved memories. Optional **background** ingest if `SECOND_BRAIN_INGEST_ON_RECALL=true`.  
+- `recall quick` — same, but asks for a shorter answer.  
 - `recall all` — **optional** multi-chat scan: with `RECALL_SCAN_ALL_CHATS=true`, walks up to `RECALL_MAX_CHATS_SCAN` threads (recent-first), pulls `RECALL_MESSAGES_PER_CHAT_SCAN` messages per thread, and calls **`POST /api/message` once per thread** so Supabase gets **multiple rows** (different dominant categories per chat). Uses `RECALL_GROUP_NAME_CONTAINS` the same way as single-thread recall when set.
 
 The agent loads history **for that conversation** (`chatId` from Photon), not unrelated global traffic.

@@ -33,7 +33,8 @@ export function formatRecallImessageReply(params: {
   chatLabel?: string;
 }): string {
   const { summary, category, action_items, recall_enrichment, isQuick, chatLabel } = params;
-  const lines: string[] = ['🧠 Recall'];
+  // Use "Memory" in the header so the word "recall" does not re-trigger the agent on delivery.
+  const lines: string[] = ['🧠 Memory'];
 
   if (chatLabel) lines.push(`📎 ${chatLabel}`);
   lines.push('');
@@ -80,6 +81,17 @@ export function formatRecallImessageReply(params: {
   return clip(lines.join('\n'));
 }
 
+/** iMessage wrapper for Dashboard-equivalent Mirror Memory (`/api/query`). */
+export function formatMirrorMemoryReply(answer: string, chatLabel?: string): string {
+  const lines: string[] = ['🧠 Mirror Memory'];
+  if (chatLabel) lines.push(`📎 ${chatLabel}`);
+  lines.push('');
+  lines.push(answer.trim());
+  lines.push('');
+  lines.push('— Second Brain —');
+  return clip(lines.join('\n'));
+}
+
 /**
  * One-line self-confirmation sent to RECALL_IMESSAGE_TARGET after auto-ingest on outgoing message.
  * NOT sent to the original conversation — only to the user's own number.
@@ -104,7 +116,7 @@ export async function processRecall(
   if (isQuick) {
     return clip(
       [
-        '🧠 Quick Recall (offline stub)',
+        '🧠 Quick Memory (offline stub)',
         '',
         `📊 ${msgCount} messages from ${senders.length} people`,
         '',
@@ -118,7 +130,7 @@ export async function processRecall(
 
   return clip(
     [
-      '🧠 RECALL (offline stub)',
+      '🧠 MEMORY (offline stub)',
       '',
       `📋 ${msgCount} messages from: ${senders.join(', ')}`,
       '',

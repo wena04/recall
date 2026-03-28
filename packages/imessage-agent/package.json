@@ -12,13 +12,18 @@
     "test:send": "tsx test/test-send.ts",
     "test:watch": "tsx test/test-watch.ts",
     "scan-all": "tsx src/run-scan-all.ts",
-    "notify-poll": "tsx src/run-notify-poll.ts"
+    "notify-poll": "tsx src/run-notify-poll.ts",
+    "serve": "tsx src/local-server.ts"
   },
   "dependencies": {
     "@photon-ai/imessage-kit": "latest",
-    "dotenv": "^16.0.0"
+    "cors": "^2.8.6",
+    "dotenv": "^16.0.0",
+    "express": "^4.22.1"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
     "@types/node": "^20.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"

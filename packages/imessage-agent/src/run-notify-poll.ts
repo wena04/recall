@@ -36,7 +36,7 @@ async function tick(): Promise<void> {
     if (!to || list.length === 0) return;
 
     for (const n of list) {
-      await sdk.send(to, `📍 Recall\n\n${n.body}`);
+      await sdk.send(to, `📍 Nearby\n\n${n.body}`);
       const ack = await fetch(`${api}/api/notifications/${n.id}/ack`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

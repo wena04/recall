@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { IMessageSDK } from '@photon-ai/imessage-kit';
-import { formatRecallImessageReply, processRecall, formatSelfNotification } from './ai-stub.js';
-import { ingestTranscriptToSecondBrain } from './ingest-api.js';
+import { formatMirrorMemoryReply, processRecall, formatSelfNotification } from './ai-stub.js';
+import { ingestTranscriptToSecondBrain, queryMirrorMemory } from './ingest-api.js';
 import { scanAllChatsAndIngest } from './scan-all-chats.js';
 import WebSocket from 'ws';
 
@@ -29,6 +29,9 @@ const RECALL_SCAN_ALL_CHATS =
 const RECALL_MAX_CHATS_SCAN = parseInt(process.env.RECALL_MAX_CHATS_SCAN || '15', 10);
 const RECALL_MESSAGES_PER_CHAT_SCAN = parseInt(process.env.RECALL_MESSAGES_PER_CHAT_SCAN || '120', 10);
 const RECALL_INGEST_DELAY_MS = parseInt(process.env.RECALL_INGEST_DELAY_MS || '1500', 10);
+
+/** Append last N thread lines to the Mirror Memory question (helps before chat is ingested + embedded). 0 = off. */
+const RECALL_THREAD_CONTEXT_LINES = parseInt(process.env.RECALL_THREAD_CONTEXT_LINES || '25', 10);
 
 // ─── Init ────────────────────────────────────────────────
 const sdk = new IMessageSDK({ debug: true });
@@ -70,7 +73,10 @@ console.log('🧠 Recall Agent starting...');
 console.log(`   Trigger: "${TRIGGER}"`);
 console.log(`   Max messages (per recall): ${MAX_MESSAGES}`);
 console.log(
-  `   Second Brain ingest: ${INGEST_BEFORE_RECALL ? 'ON (SECOND_BRAIN_INGEST_ON_RECALL)' : 'off'}`,
+  `   Thread → DB ingest (background on recall): ${INGEST_BEFORE_RECALL ? 'ON' : 'off'}`,
+);
+console.log(
+  `   Mirror Memory: POST /api/query · thread context lines: ${RECALL_THREAD_CONTEXT_LINES || 'off'}`,
 );
 if (GROUP_PATTERNS.length > 0) {
   console.log(`   Group filter (groups only): contains one of → ${GROUP_PATTERNS.join(' | ')}`);
@@ -99,12 +105,82 @@ function replyTarget(message: { chatId?: string; sender?: string }): string {
   return message.chatId || message.sender || '';
 }
 
+/**
+ * Outbound copy we generate often contains the word "recall" (headers, location pings).
+ * In group / @Recall flows those messages can arrive as normal `onGroupMessage` events — they must NOT
+ * re-trigger `handleMessage` or you get an infinite loop. Match **first line only** so a user can
+ * still write e.g. "🧠 recall my notes" on line 2+ (we only skip known canned first lines).
+ */
+function isOurAutomatedMessage(raw: string): boolean {
+  const first = raw.trim().split(/\r?\n/)[0] ?? '';
+  if (!first) return false;
+  if (/^🧠\s*recalling/i.test(first)) return true;
+  if (/^🧠\s*scanning/i.test(first)) return true;
+  if (/^🧠\s*multi-chat/i.test(first)) return true;
+  if (/^🧠\s*recall\s*$/i.test(first)) return true;
+  if (/^🧠\s*memory\s*$/i.test(first)) return true;
+  if (/^🧠\s*mirror\s+memory/i.test(first)) return true;
+  if (/^🧠\s*quick\s+recall\b/i.test(first)) return true;
+  if (/^🧠\s*recall\s*\(offline/i.test(first)) return true;
+  if (/^✅\s*(multi-chat|scanning)/i.test(first)) return true;
+  if (/^⚠️/.test(first)) return true;
+  if (/^😅\s*(scan failed|something went wrong)/i.test(first)) return true;
+  if (/^📍\s*recall\b/i.test(first)) return true;
+  if (/^✦\s*saved to brain/i.test(first)) return true;
+  return false;
+}
+
+/** Only treat as a command if "recall" appears near the start — LLM summaries often mention "recall" in the body. */
+const RECALL_TRIGGER_HEAD_CHARS = 520;
+
+function isRecallTriggerText(raw: string): boolean {
+  if (isOurAutomatedMessage(raw)) return false;
+  const lower = raw.toLowerCase().trim();
+  const head = lower.slice(0, RECALL_TRIGGER_HEAD_CHARS);
+  // Avoid matching "recallable"; still matches "@recall", "recall quick", "recall all"
+  return /\brecall\b/.test(head);
+}
+
+/**
+ * Strip trigger / @Recall and return the Mirror Memory question (same pipeline as Dashboard).
+ */
+function extractRecallQuestion(raw: string): { question: string; quick: boolean } {
+  const quick = /\b(recall\s+(quick|tldr)|quick\s+recall)\b/i.test(raw);
+  let s = raw.replace(/@\s*recall\b/gi, ' ').trim();
+  s = s.replace(/\brecall\s+(quick|tldr)\b/gi, ' ').replace(/\bquick\s+recall\b/gi, ' ');
+  s = s.replace(/\brecall\b/gi, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+
+  const defaultQ =
+    'What from my saved memories should I have top of mind right now—places, plans, people, or open threads? Answer concisely as Mirror Memory, in my voice.';
+  let question = s.length > 0 ? s : defaultQ;
+  if (quick) question += ' Keep the answer brief (under 120 words).';
+  return { question, quick };
+}
+
+function appendThreadContext(
+  question: string,
+  chatLabel: string,
+  transcriptLines: string[],
+): string {
+  if (RECALL_THREAD_CONTEXT_LINES <= 0 || transcriptLines.length === 0) return question;
+  const slice = transcriptLines.slice(-RECALL_THREAD_CONTEXT_LINES);
+  return [
+    question,
+    '',
+    '---',
+    `Recent iMessage context from thread "${chatLabel}" (may not be in the database yet):`,
+    ...slice,
+  ].join('\n');
+}
+
 // ─── Core Handler ────────────────────────────────────────
 const RECALL_ALL_RE = /\brecall\s+all\b/;
 
 async function handleMessage(message: any, isGroup: boolean) {
-  const text = (message.text || '').toLowerCase().trim();
-  if (!text.includes(TRIGGER)) return;
+  const rawText = String(message.text ?? '').trim();
+  if (!isRecallTriggerText(rawText)) return;
+  const text = rawText.toLowerCase();
 
   /** Multi-chat ingest: one API row per thread → multiple categories possible across DB. */
   if (RECALL_ALL_RE.test(text)) {
@@ -197,47 +273,55 @@ async function handleMessage(message: any, isGroup: boolean) {
 
     console.log(`   📊 ${messages.length} messages fetched`);
 
+    const lines =
+      messages.length === 0
+        ? []
+        : messages.map(
+            (m: { sender: string; text: string; date?: string }) =>
+              `[${m.date ?? '?'}] ${m.sender}: ${m.text}`,
+          );
+
     if (messages.length === 0) {
-      await sdk.send(to, 'No recent messages found to summarize.');
+      const { question: baseQuestion, quick: isQuick } = extractRecallQuestion(rawText);
+      const mirror = await queryMirrorMemory(baseQuestion);
+      if (mirror.ok) {
+        await sdk.send(to, formatMirrorMemoryReply(mirror.answer, chatLabel));
+      } else {
+        await sdk.send(
+          to,
+          `Couldn’t load thread history. Mirror Memory: ${mirror.error}\n\n${await processRecall([], sender, isQuick)}`,
+        );
+      }
+      console.log('   ✅ Done (empty thread)');
       return;
     }
-
-    const lines = messages.map(
-      (m: { sender: string; text: string; date?: string }) =>
-        `[${m.date ?? '?'}] ${m.sender}: ${m.text}`,
-    );
 
     const ingestNoteParts: string[] = [
       'Source: Photon iMessage thread. Extract recall_enrichment (keywords, places, courses_or_projects, texting_style) and persona for participants.',
     ];
     if (RECALL_DEMO_HINT) ingestNoteParts.unshift(RECALL_DEMO_HINT);
 
-    let replyText: string;
-    const isQuick = text.includes('quick') || text.includes('tldr');
-
     if (INGEST_BEFORE_RECALL) {
-      const ing = await ingestTranscriptToSecondBrain(lines, {
+      void ingestTranscriptToSecondBrain(lines, {
         chatLabel,
         photonChatId: message.chatId,
         ingestNote: ingestNoteParts.join('\n'),
+      }).then((ing) => {
+        if (ing.ok && !ing.skipped) console.log('   💾 Background thread ingest queued OK');
+        else if (!ing.skipped && !ing.ok) console.warn('   ⚠ Background ingest failed:', ing.error);
       });
-      if (!ing.skipped && ing.ok && ing.data?.summary) {
-        console.log('   💾 MiniMax + Supabase ingest OK');
-        replyText = formatRecallImessageReply({
-          summary: ing.data.summary,
-          category: ing.data.category,
-          action_items: ing.data.action_items,
-          recall_enrichment: ing.data.recall_enrichment,
-          isQuick,
-          chatLabel,
-        });
-      } else if (!ing.skipped && !ing.ok) {
-        console.warn('   ⚠ Second Brain ingest failed:', ing.error);
-        replyText = await processRecall(messages, sender, isQuick);
-      } else {
-        replyText = await processRecall(messages, sender, isQuick);
-      }
+    }
+
+    const { question: baseQuestion, quick: isQuick } = extractRecallQuestion(rawText);
+    const fullQuestion = appendThreadContext(baseQuestion, chatLabel, lines);
+
+    const mirror = await queryMirrorMemory(fullQuestion);
+    let replyText: string;
+    if (mirror.ok) {
+      console.log('   🪞 Mirror Memory /api/query OK');
+      replyText = formatMirrorMemoryReply(mirror.answer, chatLabel);
     } else {
+      console.warn('   ⚠ Mirror Memory failed:', mirror.error, '— falling back to offline stub');
       replyText = await processRecall(messages, sender, isQuick);
     }
 
@@ -297,6 +381,10 @@ async function handleScanAll(): Promise<void> {
 async function handleOwnMessage(message: any): Promise<void> {
   const chatId: string = message.chatId || '';
   if (!chatId) return;
+
+  const raw = String(message.text ?? '').trim();
+  // Our bot replies are "own" messages in some setups; never auto-ingest them.
+  if (isOurAutomatedMessage(raw)) return;
 
   // Debounce — skip if same chat was ingested recently
   const last = lastIngestedAt.get(chatId) ?? 0;
@@ -404,8 +492,8 @@ await sdk.startWatching({
 });
 
 console.log('🟢 Recall is live!');
-console.log(`   "${TRIGGER}"       → summarize + save (if ingest on)`);
-console.log(`   "${TRIGGER} quick" → shorter iMessage reply`);
+console.log(`   "${TRIGGER}"       → Mirror Memory (same as Dashboard) + background ingest if on`);
+console.log(`   "${TRIGGER} quick" → shorter answer`);
 if (RECALL_SCAN_ALL_CHATS) {
   console.log(`   "recall all"       → scan up to ${RECALL_MAX_CHATS_SCAN} chats → one ingest per thread`);
 }

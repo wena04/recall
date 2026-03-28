@@ -69,3 +69,40 @@ export async function ingestTranscriptToSecondBrain(
     };
   }
 }
+
+/** Same RAG path as Dashboard Mirror Memory — `POST /api/query`. */
+export async function queryMirrorMemory(
+  question: string,
+): Promise<{ ok: true; answer: string } | { ok: false; error: string }> {
+  const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '');
+  const userId = process.env.SECOND_BRAIN_USER_ID;
+  if (!base || !userId) {
+    return { ok: false, error: 'SECOND_BRAIN_API_URL or SECOND_BRAIN_USER_ID not set' };
+  }
+
+  const q = question.trim();
+  if (!q) {
+    return { ok: false, error: 'Empty question' };
+  }
+
+  try {
+    const res = await fetch(`${base}/api/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, question: q }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { error?: string; answer?: string };
+    if (!res.ok) {
+      return { ok: false, error: j.error ?? `HTTP ${res.status}` };
+    }
+    if (typeof j.answer !== 'string' || !j.answer.trim()) {
+      return { ok: false, error: 'Empty answer from /api/query' };
+    }
+    return { ok: true, answer: j.answer.trim() };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
