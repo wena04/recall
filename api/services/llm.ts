@@ -191,6 +191,7 @@ export async function callMiniMaxTextCompletion(
   userText: string,
   systemPrompt: string,
   model?: string,
+  maxTokens?: number,
 ): Promise<string> {
   if (!MINIMAX_API_KEY) {
     throw new Error("MINIMAX_API_KEY is not set");
@@ -207,7 +208,7 @@ export async function callMiniMaxTextCompletion(
     },
     body: JSON.stringify({
       model: model || MINIMAX_MODEL,
-      max_tokens: 8192,
+      max_tokens: maxTokens ?? 8192,
       temperature: 0.2,
       system: systemPrompt,
       messages: [
@@ -281,6 +282,52 @@ async function callMiniMaxChatCompletionV2(
   }
 
   return extractTextFromChatCompletionBody(data);
+}
+
+/**
+ * MiniMax embedding API — returns 1536-dim float vectors.
+ * Use type="db" when storing, type="query" when searching.
+ */
+export async function callMiniMaxEmbedding(
+  texts: string[],
+  type: 'db' | 'query' = 'db',
+): Promise<number[][]> {
+  if (!MINIMAX_API_KEY) {
+    throw new Error('MINIMAX_API_KEY is not set');
+  }
+
+  const base = MINIMAX_LEGACY_BASE_URL.replace(/\/$/, '');
+  const url = MINIMAX_GROUP_ID
+    ? `${base}/embeddings?GroupId=${MINIMAX_GROUP_ID}`
+    : `${base}/embeddings`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${MINIMAX_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: 'embo-01', texts, type }),
+  });
+
+  const rawText = await response.text();
+  let data: unknown;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    throw new Error(`MiniMax Embedding: non-JSON response (${response.status}): ${rawText.slice(0, 300)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`MiniMax Embedding HTTP ${response.status}: ${rawText.slice(0, 300)}`);
+  }
+
+  const d = data as Record<string, unknown>;
+  const vectors = d.vectors as number[][] | undefined;
+  if (!Array.isArray(vectors) || vectors.length === 0) {
+    throw new Error(`MiniMax Embedding: unexpected response shape: ${JSON.stringify(d).slice(0, 300)}`);
+  }
+  return vectors;
 }
 
 export async function extractContent(

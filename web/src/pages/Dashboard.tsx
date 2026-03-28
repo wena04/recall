@@ -17,6 +17,7 @@ import Chatbot from "@/components/Chatbot";
 import LocationTracker from "@/components/LocationTracker";
 import MemoryCard, { type KnowledgeItem } from "@/components/MemoryCard";
 import MemoryEditModal from "@/components/MemoryEditModal";
+import PersonalityCard from "@/components/PersonalityCard";
 import {
   PiBowlFood,
   PiConfetti,
@@ -370,6 +371,8 @@ export default function Dashboard() {
             </div>
           )}
         </BentoCard>
+
+        {user && <PersonalityCard userId={user.id} />}
 
         <BentoCard className="mx-auto mt-8 max-w-5xl">
           {user && <Chatbot userId={user.id} />}

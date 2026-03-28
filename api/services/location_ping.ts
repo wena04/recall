@@ -2,9 +2,10 @@ import { supabase } from "../lib/supabase.js";
 import { callMiniMaxTextCompletion } from "./llm.js";
 import { reverseGeocodeCity } from "./geocode.js";
 
-/** Short iMessage copy; M2.7-style default — override with MINIMAX_LOCATION_MODEL. */
-const LOCATION_MODEL =
-  process.env.MINIMAX_LOCATION_MODEL || process.env.MINIMAX_MODEL || "MiniMax-M2.7";
+/** Use M2-her so notifications feel like they come from the user's own digital twin. */
+const LOCATION_MODEL = process.env.MINIMAX_LOCATION_MODEL || "M2-her";
+/** M2-her max_tokens cap is 2048. */
+const LOCATION_MAX_TOKENS = 2048;
 
 function minMsBetweenNotifications(f: string): number | null {
   switch (f) {
@@ -176,24 +177,24 @@ export async function processLocationReport(
     )
     .join("\n");
 
-  const system = `You write short, friendly iMessage pings (max ~600 characters). No markdown. Emoji ok sparingly.
-The user just arrived in or near a place. Remind them of saved memories that might be relevant.
-Be specific from the list; do not invent venues.`;
+  const system = `You are the user's Mirror Memory — their digital twin sending a self-reminder iMessage.
+Write as if YOU are the user texting yourself. Casual, personal, first-person ("hey, remember when..." / "omg we should...").
+Max ~500 characters. No markdown. Emoji ok. Be specific from the memory list; never invent venues.`;
 
-  const userPrompt = `City/area (reverse-geocoded): ${city}
+  const userPrompt = `You just arrived near: ${city}
 
-Saved memories that mention this area:
+Your saved memories about this area:
 ${bullets}
 
-Write one iMessage-style message (1–3 short paragraphs max) suggesting what they might do or remember.`;
+Write one short iMessage to yourself reminding you what to check out or remember here.`;
 
   let body: string;
   try {
-    body = await callMiniMaxTextCompletion(userPrompt, system, LOCATION_MODEL);
-    body = body.trim().slice(0, 2000);
+    body = await callMiniMaxTextCompletion(userPrompt, system, LOCATION_MODEL, LOCATION_MAX_TOKENS);
+    body = body.trim().slice(0, 1000);
   } catch (e) {
     console.error("location_ping llm:", e);
-    body = `📍 You're near ${city}. You have ${matches.length} saved Recall memories here — open your dashboard for ideas.`;
+    body = `hey, you're near ${city}! you have ${matches.length} saved memories here — check your Recall dashboard 📍`;
   }
 
   const { data: row, error: insErr } = await supabase
