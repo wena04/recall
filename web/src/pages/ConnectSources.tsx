@@ -14,6 +14,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 
 type SourceKind =
   | 'imessage_demo'
+  | 'imessage_photon'
   | 'wechat_export'
   | 'whatsapp_export'
   | 'paste_chat'
@@ -31,6 +32,13 @@ const SOURCES: {
   sourceType: SourceType;
   badge?: string;
 }[] = [
+  {
+    id: 'imessage_photon',
+    title: 'iMessage (Live)',
+    subtitle: 'Scan all chats via Photon agent.',
+    sourceType: 'chat_export',
+    badge: 'Local agent',
+  },
   {
     id: 'imessage_demo',
     title: 'iMessage group',
@@ -92,6 +100,13 @@ export default function ConnectSources() {
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'done' | 'error'>('idle');
+  const [scanResult, setScanResult] = useState<{ scanned: number; ingested: number; skippedEmpty: number; failed: number } | null>(null);
+  const [scanErrorMsg, setScanErrorMsg] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState<{
+    currentChat: string; chatsDone: number; chatsTotal: number;
+    ingested: number; skippedEmpty: number; failed: number; log: string[];
+  } | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -117,9 +132,57 @@ export default function ConnectSources() {
     run();
   }, [navigate]);
 
+  // Poll scan status while scanning
+  useEffect(() => {
+    if (scanStatus !== 'scanning' || !user) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/imessage/scan-status?userId=${user.id}`);
+        const json = await res.json();
+        if (json.progress) setScanProgress(json.progress);
+        if (json.status === 'done') {
+          setScanStatus('done');
+          setScanResult(json.result ?? null);
+          clearInterval(interval);
+        } else if (json.status === 'error') {
+          setScanStatus('error');
+          setScanErrorMsg(json.errorMessage ?? 'Unknown error');
+          clearInterval(interval);
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [scanStatus, user]);
+
+  const handleScanTrigger = async () => {
+    if (!user) return;
+    setScanStatus('scanning');
+    setScanResult(null);
+    setScanErrorMsg(null);
+    try {
+      const res = await fetch('/api/imessage/scan-trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setScanStatus('error');
+        setScanErrorMsg(json.error ?? `Failed (${res.status})`);
+      }
+    } catch {
+      setScanStatus('error');
+      setScanErrorMsg('Network error — is the API running on :3001?');
+    }
+  };
+
   const pickSource = (id: SourceKind) => {
     setSelected(id);
     setStatus(null);
+    if (id === 'imessage_photon') {
+      setContent('');
+      return;
+    }
     if (id === 'imessage_demo') {
       setContent(SAMPLE_IMESSAGE_GROUP);
       return;
@@ -276,61 +339,135 @@ export default function ConnectSources() {
         </div>
 
         <BentoCard className="mx-auto max-w-3xl">
-          <form onSubmit={handleIngest}>
-            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <label className="text-sm font-medium text-stone-800">
-                {selected ? 'Paste content' : 'Pick a source to start'}
-              </label>
-              {(selected === 'wechat_export' ||
-                selected === 'whatsapp_export' ||
-                selected === 'paste_chat' ||
-                selected === 'xhs_favorites' ||
-                selected === 'tiktok_favorites') && (
-                <label className="cursor-pointer text-xs font-medium text-violet-700">
-                  <input
-                    type="file"
-                    accept=".txt,text/plain"
-                    className="hidden"
-                    onChange={handleFile}
-                  />
-                  <span className="underline">Upload .txt</span>
-                </label>
-              )}
-            </div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              disabled={!selected}
-              rows={10}
-              placeholder={
-                !selected
-                  ? 'Select a source card to enable input.'
-                  : selected === 'screenshot_caption'
-                    ? 'Caption + place names from screenshot...'
-                    : selected === 'xhs_favorites'
-                      ? '链接 + 标题 + 地点...'
-                      : selected === 'tiktok_favorites'
-                        ? 'Share link + caption + place...'
-                        : 'Paste chat export, note, or link...'
-              }
-              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-mono text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:bg-stone-50 disabled:text-stone-400"
-            />
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          {selected === 'imessage_photon' ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm font-medium text-stone-800">Scan all iMessage chats</p>
+              <p className="text-sm text-stone-500">
+                Triggers your local Photon agent to scan all recent chats and ingest them into Second Brain.
+                Make sure <code className="rounded bg-stone-100 px-1 text-xs">npm run agent:start</code> is running.
+              </p>
               <button
-                type="submit"
-                disabled={!selected || !content.trim() || submitting}
-                className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
+                type="button"
+                onClick={handleScanTrigger}
+                disabled={scanStatus === 'scanning'}
+                className="w-fit rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
               >
-                {submitting ? 'Sending...' : 'Ingest into Recall'}
+                {scanStatus === 'scanning' ? 'Scanning...' : 'Scan All Chats'}
               </button>
-              {status && (
-                <span className="inline-flex items-center gap-2 text-sm text-stone-600" role="status">
-                  <StatusBadge tone={statusTone}>{statusTone === 'amber' ? 'Notice' : 'Status'}</StatusBadge>
-                  {status}
-                </span>
+              {scanStatus === 'scanning' && (
+                <div className="flex flex-col gap-2">
+                  {scanProgress ? (
+                    <>
+                      {/* Progress bar */}
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-100">
+                        <div
+                          className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                          style={{ width: scanProgress.chatsTotal > 0 ? `${Math.round((scanProgress.chatsDone / scanProgress.chatsTotal) * 100)}%` : '0%' }}
+                        />
+                      </div>
+                      {/* Stats row */}
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-stone-500">
+                        <span className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
+                          {scanProgress.chatsDone}/{scanProgress.chatsTotal} chats
+                        </span>
+                        <span className="text-emerald-600">✦ {scanProgress.ingested} saved</span>
+                        {scanProgress.skippedEmpty > 0 && <span>{scanProgress.skippedEmpty} skipped</span>}
+                        {scanProgress.failed > 0 && <span className="text-amber-600">{scanProgress.failed} failed</span>}
+                      </div>
+                      {/* Current chat */}
+                      <p className="truncate text-xs text-stone-400">
+                        {scanProgress.currentChat ? `Scanning ${scanProgress.currentChat}…` : 'Starting…'}
+                      </p>
+                      {/* Live log */}
+                      {scanProgress.log.length > 0 && (
+                        <div className="max-h-32 overflow-y-auto rounded-lg bg-stone-50 p-2 font-mono text-[11px] text-stone-500">
+                          {[...scanProgress.log].reverse().map((line, i) => (
+                            <div key={i} className={line.startsWith('✦') ? 'text-emerald-600' : line.startsWith('✗') ? 'text-amber-600' : ''}>
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="flex items-center gap-2 text-sm text-stone-600">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
+                      Fetching messages — this may take a moment…
+                    </span>
+                  )}
+                </div>
+              )}
+              {scanStatus === 'done' && scanResult && (
+                <StatusBadge tone={scanResult.ingested > 0 ? 'emerald' : 'amber'} className="normal-case tracking-normal w-fit">
+                  {scanResult.ingested > 0
+                    ? `Done — ${scanResult.ingested} ingested · ${scanResult.skippedEmpty ?? 0} empty · ${scanResult.failed} failed (${scanResult.scanned} scanned)`
+                    : `0 ingested — ${scanResult.skippedEmpty ?? 0} chats had no text messages. Check [agent] log for details.`}
+                </StatusBadge>
+              )}
+              {scanStatus === 'error' && (
+                <StatusBadge tone="amber" className="normal-case tracking-normal w-fit">
+                  Error: {scanErrorMsg}
+                </StatusBadge>
               )}
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleIngest}>
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="text-sm font-medium text-stone-800">
+                  {selected ? 'Paste content' : 'Pick a source to start'}
+                </label>
+                {(selected === 'wechat_export' ||
+                  selected === 'whatsapp_export' ||
+                  selected === 'paste_chat' ||
+                  selected === 'xhs_favorites' ||
+                  selected === 'tiktok_favorites') && (
+                  <label className="cursor-pointer text-xs font-medium text-violet-700">
+                    <input
+                      type="file"
+                      accept=".txt,text/plain"
+                      className="hidden"
+                      onChange={handleFile}
+                    />
+                    <span className="underline">Upload .txt</span>
+                  </label>
+                )}
+              </div>
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                disabled={!selected}
+                rows={10}
+                placeholder={
+                  !selected
+                    ? 'Select a source card to enable input.'
+                    : selected === 'screenshot_caption'
+                      ? 'Caption + place names from screenshot...'
+                      : selected === 'xhs_favorites'
+                        ? '链接 + 标题 + 地点...'
+                        : selected === 'tiktok_favorites'
+                          ? 'Share link + caption + place...'
+                          : 'Paste chat export, note, or link...'
+                }
+                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-mono text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:bg-stone-50 disabled:text-stone-400"
+              />
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="submit"
+                  disabled={!selected || !content.trim() || submitting}
+                  className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
+                >
+                  {submitting ? 'Sending...' : 'Ingest into Recall'}
+                </button>
+                {status && (
+                  <span className="inline-flex items-center gap-2 text-sm text-stone-600" role="status">
+                    <StatusBadge tone={statusTone}>{statusTone === 'amber' ? 'Notice' : 'Status'}</StatusBadge>
+                    {status}
+                  </span>
+                )}
+              </div>
+            </form>
+          )}
         </BentoCard>
       </div>
     </div>

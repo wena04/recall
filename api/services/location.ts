@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
-import WebSocket from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 
-const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocketServer({ noServer: true });
 
 const userConnections = new Map<string, WebSocket>();
 
@@ -15,6 +15,13 @@ wss.on('connection', (ws, req) => {
     });
   }
 });
+
+export function broadcastToUser(userId: string, payload: object): boolean {
+  const ws = userConnections.get(userId);
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(payload));
+  return true;
+}
 
 export function attachWebSocketServer(server: any) {
   server.on('upgrade', (request: any, socket: any, head: any) => {

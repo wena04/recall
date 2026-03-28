@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { IMessageSDK } from '@photon-ai/imessage-kit';
-import { formatRecallImessageReply, processRecall } from './ai-stub.js';
+import { formatRecallImessageReply, processRecall, formatSelfNotification } from './ai-stub.js';
 import { ingestTranscriptToSecondBrain } from './ingest-api.js';
 import { scanAllChatsAndIngest } from './scan-all-chats.js';
 import WebSocket from 'ws';
@@ -34,6 +34,10 @@ const RECALL_INGEST_DELAY_MS = parseInt(process.env.RECALL_INGEST_DELAY_MS || '1
 const sdk = new IMessageSDK({ debug: true });
 
 const chatLabelById = new Map<string, string>();
+
+// Debounce map for auto-ingest on own outgoing messages (chatId → last ingest epoch ms)
+const lastIngestedAt = new Map<string, number>();
+const DEBOUNCE_MS = 10 * 60 * 1000; // 10 minutes
 
 function humanizeChatId(chatId: string): string {
   const tail = chatId.includes(';') ? chatId.split(';').slice(1).join(';') : chatId;
@@ -246,32 +250,157 @@ async function handleMessage(message: any, isGroup: boolean) {
   }
 }
 
-const ws = new WebSocket(`ws://localhost:3001?userId=${process.env.SECOND_BRAIN_USER_ID}`);
-
-ws.on('open', () => {
-  console.log('🟢 Connected to backend for notifications');
-});
-
-ws.on('message', (data) => {
-  try {
-    const message = JSON.parse(data.toString());
-    if (message.type === 'notification') {
-      console.log('📬 Received notification:', message.message);
-      sdk.send(process.env.RECALL_IMESSAGE_TARGET || '', message.message);
-    }
-  } catch (error) {
-    console.error('Error parsing message from backend:', error);
+// ─── WebSocket-triggered scan (from Connect page) ────────
+async function handleScanAll(): Promise<void> {
+  console.log('\n📡 Received scan_all from backend — starting full chat scan...');
+  const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '');
+  const userId = process.env.SECOND_BRAIN_USER_ID;
+  if (!base || !userId) {
+    console.warn('   ⚠ scan_all: SECOND_BRAIN_API_URL or SECOND_BRAIN_USER_ID not set, aborting');
+    return;
   }
-});
+  try {
+    const result = await scanAllChatsAndIngest(sdk, {
+      maxChats: RECALL_MAX_CHATS_SCAN,
+      messagesPerChat: RECALL_MESSAGES_PER_CHAT_SCAN,
+      delayMs: RECALL_INGEST_DELAY_MS,
+      demoHint: RECALL_DEMO_HINT || undefined,
+      onProgress: (p) => {
+        fetch(`${base}/api/imessage/scan-progress`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, progress: p }),
+        }).catch(() => {}); // fire-and-forget, don't block scan
+      },
+    });
+    await fetch(`${base}/api/imessage/scan-complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, success: true, result: { scanned: result.scanned, ingested: result.ingested, skippedEmpty: result.skippedEmpty, failed: result.failed } }),
+    });
+    console.log(`   ✅ scan_all complete: ${result.ingested} ingested, ${result.skippedEmpty} skipped-empty, ${result.failed} failed / ${result.scanned} scanned`);
+    if (result.errors.length > 0) console.warn('   Errors:', result.errors.slice(0, 5));
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error('   ❌ scan_all failed:', error);
+    try {
+      await fetch(`${base}/api/imessage/scan-complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, success: false, error }),
+      });
+    } catch { /* ignore — backend may be down */ }
+  }
+}
 
-ws.on('close', () => {
-  console.log('🔴 Disconnected from backend');
-});
+// ─── Auto-ingest on own outgoing messages ────────────────
+async function handleOwnMessage(message: any): Promise<void> {
+  const chatId: string = message.chatId || '';
+  if (!chatId) return;
+
+  // Debounce — skip if same chat was ingested recently
+  const last = lastIngestedAt.get(chatId) ?? 0;
+  if (Date.now() - last < DEBOUNCE_MS) return;
+  lastIngestedAt.set(chatId, Date.now());
+
+  const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '');
+  const userId = process.env.SECOND_BRAIN_USER_ID;
+  if (!base || !userId) return;
+
+  const chatLabel = chatLabelById.get(chatId) || humanizeChatId(chatId);
+  console.log(`\n📤 Own message detected in "${chatLabel}" — auto-ingesting`);
+
+  try {
+    const history = await sdk.getMessages({
+      chatId,
+      limit: 40,
+      excludeOwnMessages: false,
+      excludeReactions: true,
+    });
+    const getText = (m: any): string =>
+      String(m.text ?? m.body ?? m.content ?? m.message ?? '').trim();
+    const lines = (history.messages || [])
+      .map((m: any) => { const t = getText(m); return t ? `[${m.date ?? '?'}] ${m.sender || 'Me'}: ${t}` : null; })
+      .filter((l): l is string => l !== null);
+
+    if (lines.length === 0) return;
+
+    const ing = await ingestTranscriptToSecondBrain(lines, {
+      chatLabel,
+      photonChatId: chatId,
+      ingestNote: 'Source: auto-ingest on own outgoing message.',
+    });
+
+    if (ing.ok && !ing.skipped && ing.data?.summary) {
+      const target = process.env.RECALL_IMESSAGE_TARGET || '';
+      if (target) {
+        const confirmText = formatSelfNotification(ing.data.summary, ing.data.category);
+        await sdk.send(target, confirmText);
+      }
+      console.log(`   ✅ Auto-ingest done for "${chatLabel}"`);
+    }
+  } catch (e) {
+    console.error('   ❌ handleOwnMessage error:', e instanceof Error ? e.message : e);
+  }
+}
+
+// ─── Backend WebSocket (auto-reconnect) ──────────────────
+const WS_URL = `ws://localhost:3001?userId=${process.env.SECOND_BRAIN_USER_ID}`;
+const WS_RECONNECT_MS = 5000;
+
+function connectBackendWs(): void {
+  const ws = new WebSocket(WS_URL);
+
+  ws.on('open', () => {
+    console.log('🟢 Connected to backend for notifications');
+  });
+
+  ws.on('message', (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      if (message.type === 'notification') {
+        console.log('📬 Received notification:', message.message);
+        sdk.send(process.env.RECALL_IMESSAGE_TARGET || '', message.message);
+      } else if (message.type === 'scan_all') {
+        handleScanAll(); // fire-and-forget
+      }
+    } catch (error) {
+      console.error('Error parsing message from backend:', error);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log(`🔴 Disconnected from backend — retrying in ${WS_RECONNECT_MS / 1000}s...`);
+    setTimeout(connectBackendWs, WS_RECONNECT_MS);
+  });
+
+  ws.on('error', (err) => {
+    // 'close' fires after 'error', so reconnect is handled there
+    console.warn(`⚠ Backend WS error: ${err.message}`);
+  });
+}
+
+connectBackendWs();
 
 // ─── Watch ───────────────────────────────────────────────
+// Own messages typically have no sender (null/undefined) or match RECALL_OWN_SENDER.
+const OWN_SENDER = (process.env.RECALL_OWN_SENDER || '').toLowerCase();
+
+function isOwnMessage(msg: any): boolean {
+  if (!msg.sender) return true;
+  if (OWN_SENDER && msg.sender.toLowerCase() === OWN_SENDER) return true;
+  return false;
+}
+
 await sdk.startWatching({
-  onDirectMessage: (msg: any) => handleMessage(msg, false),
-  onGroupMessage: (msg: any) => handleMessage(msg, true),
+  onDirectMessage: (msg: any) => {
+    if (isOwnMessage(msg)) { handleOwnMessage(msg); return; }
+    handleMessage(msg, false);
+  },
+  onGroupMessage: (msg: any) => {
+    if (isOwnMessage(msg)) { handleOwnMessage(msg); return; }
+    handleMessage(msg, true);
+  },
 });
 
 console.log('🟢 Recall is live!');
