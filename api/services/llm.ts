@@ -190,6 +190,7 @@ async function callMiniMaxAnthropicMessages(userText: string): Promise<string> {
 export async function callMiniMaxTextCompletion(
   userText: string,
   systemPrompt: string,
+  model?: string,
 ): Promise<string> {
   if (!MINIMAX_API_KEY) {
     throw new Error("MINIMAX_API_KEY is not set");
@@ -205,7 +206,7 @@ export async function callMiniMaxTextCompletion(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: MINIMAX_MODEL,
+      model: model || MINIMAX_MODEL,
       max_tokens: 8192,
       temperature: 0.2,
       system: systemPrompt,

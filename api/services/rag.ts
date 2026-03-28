@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabase";
 import { callMiniMaxTextCompletion } from "./llm";
 
-// A simple in-memory cache for user texting styles
+const RAG_MODEL = process.env.MINIMAX_RAG_MODEL || "M2-her";
 const userStyleCache = new Map<string, string>();
 
 async function getUserTextingStyle(userId: string): Promise<string> {
@@ -70,7 +70,11 @@ ${question}`;
   const userContent = `Question: "${question}"`;
 
   // 4. Call MiniMax to get the answer
-  const answer = await callMiniMaxTextCompletion(userContent, systemPrompt);
+  const answer = await callMiniMaxTextCompletion(
+    userContent,
+    systemPrompt,
+    RAG_MODEL,
+  );
 
   return answer;
 }
