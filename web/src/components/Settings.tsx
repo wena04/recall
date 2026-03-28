@@ -111,24 +111,14 @@ export default function Settings({ user }: SettingsProps) {
                 ))}
               </select>
               <label className="mb-2 mt-4 text-sm font-medium text-stone-700" htmlFor="notify-to">
-                Send iMessages to (Photon <code className="text-xs">send()</code> target)
+                Send iMessages to (your phone number)
               </label>
               <input
                 className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm text-stone-800 outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200"
                 id="notify-to"
                 value={notificationImessageTo}
                 onChange={(e) => setNotificationImessageTo(e.target.value)}
-                placeholder="+1… or chatId from listChats"
-              />
-              <label className="mb-2 mt-4 text-sm font-medium text-stone-700" htmlFor="notify-to">
-                Send iMessages to (Photon <code className="text-xs">send()</code> target)
-              </label>
-              <input
-                className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm text-stone-800 outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200"
-                id="notify-to"
-                value={notificationImessageTo}
-                onChange={(e) => setNotificationImessageTo(e.target.value)}
-                placeholder="+1… or chatId from listChats"
+                placeholder="+1XXXXXXXXXX"
               />
             </fieldset>
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { extractContent, extractContentFromImage } from '../services/llm.js';
 import { createNotionPage } from '../services/notion.js';
+import { embedKnowledgeItem } from '../services/personality.js';
 
 const router = Router();
 
@@ -101,7 +102,12 @@ router.post('/message', async (req, res) => {
     return res.status(500).json({ error: extractError.message });
   }
 
-  // 4. Get user's Notion credentials
+  // 4. Fire-and-forget: embed the summary for semantic search
+  embedKnowledgeItem(insertData.id, extraction.summary).catch((e) =>
+    console.warn('Embedding failed (non-fatal):', e?.message ?? e),
+  );
+
+  // 5. Get user's Notion credentials
   const { data: user, error: userError } = await supabase
     .from('users')
     .select('notion_token, notion_database_id')
@@ -112,7 +118,7 @@ router.post('/message', async (req, res) => {
     return res.json({ status: 'success', message: 'Message extracted, Notion not configured', data: extractedData });
   }
 
-  // 5. Create Notion page if configured
+  // 6. Create Notion page if configured
   if (user.notion_token && user.notion_database_id) {
     const notionPageId = await createNotionPage(
       user.notion_token,

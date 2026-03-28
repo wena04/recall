@@ -1,77 +1,122 @@
 import { supabase } from "../lib/supabase.js";
-import { callMiniMaxTextCompletion } from "./llm.js";
+import { callMiniMaxTextCompletion, callMiniMaxEmbedding } from "./llm.js";
 
-const RAG_MODEL = process.env.MINIMAX_RAG_MODEL || "M2-her";
-const userStyleCache = new Map<string, string>();
+const RAG_MODEL = process.env.MINIMAX_RAG_MODEL || "MiniMax-M2.7";
 
-async function getUserTextingStyle(userId: string): Promise<string> {
-  if (userStyleCache.has(userId)) {
-    return userStyleCache.get(userId)!;
-  }
+// ─── Fetch personality profile for richer system prompt ───────────────────────
 
-  const { data: items, error } = await supabase
-    .from("knowledge_items")
-    .select("recall_enrichment")
+async function getUserPersonality(userId: string): Promise<string> {
+  const { data } = await supabase
+    .from("user_personality")
+    .select("profile")
     .eq("user_id", userId)
-    .limit(50);
+    .single();
 
-  if (error) {
-    console.error("Error fetching user texting style:", error);
-    return ""; // Default to empty string if there's an error
-  }
-
-  // For now, we'll just use the first texting style we find.
-  // In the future, we could do something more sophisticated here, like averaging them.
-  for (const item of items) {
-    const style = (item.recall_enrichment as any)?.texting_style;
-    if (style) {
-      userStyleCache.set(userId, style);
-      return style;
-    }
-  }
-
-  return "";
+  if (!data?.profile) return "";
+  const p = data.profile as Record<string, unknown>;
+  const parts: string[] = [];
+  if (p.mbti_guess) parts.push(`MBTI: ${p.mbti_guess} (${p.mbti_confidence} confidence)`);
+  if (p.personality_summary) parts.push(String(p.personality_summary));
+  if (Array.isArray(p.communication_traits) && p.communication_traits.length)
+    parts.push(`Communication style: ${(p.communication_traits as string[]).join(", ")}`);
+  if (p.language_style) parts.push(`Language: ${p.language_style}`);
+  return parts.join("\n");
 }
 
-export async function handleQuery(
+// ─── Semantic vector search via pgvector RPC ──────────────────────────────────
+
+async function semanticSearch(
   userId: string,
   question: string,
-): Promise<string> {
-  // 1. Retrieve relevant knowledge items from Supabase
-  const { data: items, error } = await supabase
+): Promise<{ summary: string; source_context: string | null }[]> {
+  let queryVec: number[][];
+  try {
+    queryVec = await callMiniMaxEmbedding([question], "query");
+  } catch (e) {
+    console.warn("Embedding query failed, skipping semantic search:", (e as Error).message);
+    return [];
+  }
+
+  const { data, error } = await supabase.rpc("match_knowledge_items", {
+    query_embedding: JSON.stringify(queryVec[0]),
+    match_user_id: userId,
+    match_count: 5,
+  });
+
+  if (error) {
+    console.warn("pgvector RPC failed:", error.message);
+    return [];
+  }
+
+  return (data ?? []) as { summary: string; source_context: string | null }[];
+}
+
+// ─── FTS + ilike fallback ─────────────────────────────────────────────────────
+
+async function keywordSearch(
+  userId: string,
+  question: string,
+): Promise<{ summary: string; source_context: string | null }[]> {
+  const { data: ftsData, error: ftsError } = await supabase
     .from("knowledge_items")
     .select("summary, source_context")
     .eq("user_id", userId)
     .textSearch("summary", question, { type: "websearch" })
     .limit(5);
 
-  if (error) {
-    console.error("Error searching for knowledge items:", error);
-    throw error;
+  if (!ftsError && ftsData && ftsData.length > 0) return ftsData;
+
+  const firstWord = question.trim().split(/\s+/)[0];
+  const { data: ilikeData } = await supabase
+    .from("knowledge_items")
+    .select("summary, source_context")
+    .eq("user_id", userId)
+    .ilike("summary", `%${firstWord}%`)
+    .limit(5);
+
+  return ilikeData ?? [];
+}
+
+// ─── Main query handler ───────────────────────────────────────────────────────
+
+export async function handleQuery(userId: string, question: string): Promise<string> {
+  // 1. Try semantic vector search first, fall back to keyword search
+  let items = await semanticSearch(userId, question);
+
+  if (items.length === 0) {
+    items = await keywordSearch(userId, question);
   }
 
-  // 2. Get the user's texting style
-  const textingStyle = await getUserTextingStyle(userId);
+  // 2. If still empty, grab the most recent items for general context
+  if (items.length === 0) {
+    const { data: recentData } = await supabase
+      .from("knowledge_items")
+      .select("summary, source_context")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    items = recentData ?? [];
+  }
 
-  // 3. Construct the prompt for MiniMax
+  // 3. Load personality profile for richer, more personal answers
+  const personality = await getUserPersonality(userId);
+
+  // 4. Build system prompt
   const context = items
-    .map((item) => `Summary: ${item.summary}\nSource: ${item.source_context}`)
-    .join("\n\n");
-  const systemPrompt = `You are a digital clone of a person. Your goal is to answer questions based on their saved memories, using their own voice and style. Do not act like a generic AI assistant.
+    .map((item) => `- ${item.summary}${item.source_context ? ` (${item.source_context.slice(0, 120)})` : ""}`)
+    .join("\n");
 
-Here is the person's texting style: "${textingStyle}"
+  const personalitySection = personality
+    ? `\nYour personality profile:\n${personality}\n`
+    : "";
 
-Here are some of their saved memories:
-${context}
+  const systemPrompt = `You are a digital clone of a person — Mirror Memory. Answer questions based on their saved memories, using their own voice and style. Be specific and personal, not generic.${personalitySection}
+Relevant memories:
+${context || "(no specific memories found — answer generally based on your personality)"}`;
 
-Now, answer the following question as if you were them:
-${question}`;
-
-  const userContent = `Question: "${question}"`;
-
-  // 4. Call MiniMax to get the answer
+  // 5. Call MiniMax M2.7
   const answer = await callMiniMaxTextCompletion(
-    userContent,
+    `Question: "${question}"`,
     systemPrompt,
     RAG_MODEL,
   );
