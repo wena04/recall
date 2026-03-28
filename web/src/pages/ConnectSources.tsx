@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   SAMPLE_IMESSAGE_GROUP,
@@ -8,6 +8,9 @@ import {
   SAMPLE_REDNOTE_SAVED,
   SAMPLE_TIKTOK_SAVED,
 } from '@/data/demoIngestSamples';
+import { SOURCE_FIGURES } from '@/assets/connect/sourceFigures';
+import BentoCard from '@/components/ui/BentoCard';
+import StatusBadge from '@/components/ui/StatusBadge';
 
 type SourceKind =
   | 'imessage_demo'
@@ -31,57 +34,54 @@ const SOURCES: {
   {
     id: 'imessage_demo',
     title: 'iMessage group',
-    subtitle: 'Demo: we load a fake group thread. Real build uses Photon on your Mac.',
+    subtitle: 'Demo thread, one-click load.',
     sourceType: 'chat_export',
     badge: 'Simulated',
   },
   {
     id: 'wechat_export',
     title: 'WeChat export',
-    subtitle: 'Paste a .txt export or use the sample transcript.',
+    subtitle: 'Paste .txt or load sample.',
     sourceType: 'chat_export',
   },
   {
     id: 'whatsapp_export',
     title: 'WhatsApp export',
-    subtitle: 'Paste an exported chat (.txt). Same pipeline as WeChat.',
+    subtitle: 'Drop your exported .txt.',
     sourceType: 'chat_export',
   },
   {
     id: 'paste_chat',
     title: 'Any chat paste',
-    subtitle: 'Drop messy threads from Slack, Discord, SMS copy-paste, etc.',
+    subtitle: 'Slack, Discord, SMS and more.',
     sourceType: 'text',
   },
   {
     id: 'xhs_favorites',
     title: '小红书 收藏夹',
-    subtitle:
-      'No bulk API: paste 链接 + 你看到的标题/地点/摘要。批量可走官方「申请个人信息副本」（慢，演示慎用）。',
+    subtitle: 'Paste link + title + place.',
     sourceType: 'rednote',
     badge: 'Paste / export',
   },
   {
     id: 'tiktok_favorites',
     title: 'TikTok Saved',
-    subtitle:
-      'No consumer favorites API: paste 分享链接 + on-screen caption。部分地区可申请数据下载（重、慢）。',
+    subtitle: 'Paste share link + caption.',
     sourceType: 'tiktok',
     badge: 'Paste / export',
   },
   {
     id: 'link_note',
     title: 'Link or short note',
-    subtitle: 'A single URL, bullet list, or quick thought.',
+    subtitle: 'URL, bullets, quick notes.',
     sourceType: 'url',
   },
   {
     id: 'screenshot_caption',
     title: 'Screenshot (any app)',
-    subtitle:
-      'Paste caption + place names from a screenshot. (Vision ingest: call POST /api/message with image_base64 from backend/scripts.)',
+    subtitle: 'Paste caption and place names.',
     sourceType: 'image',
-    badge: 'Text in UI',
+    badge: 'Text for now',
   },
 ];
 
@@ -150,7 +150,7 @@ export default function ConnectSources() {
     ? SOURCES.find((s) => s.id === selected)?.sourceType ?? 'text'
     : 'text';
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -163,7 +163,7 @@ export default function ConnectSources() {
     reader.readAsText(file);
   };
 
-  const handleIngest = async (e: React.FormEvent) => {
+  const handleIngest = async (e: FormEvent) => {
     e.preventDefault();
     if (!user || !content.trim() || !selected) return;
     setSubmitting(true);
@@ -196,128 +196,142 @@ export default function ConnectSources() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-500">
-        Checking session…
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-violet-50/80 to-stone-50">
+        <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-white px-4 py-2 text-sm text-stone-600 shadow-sm">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
+          Checking session...
+        </div>
       </div>
     );
   }
 
+  const statusLower = status?.toLowerCase() ?? '';
+  const statusTone =
+    statusLower.includes('saved') || statusLower.includes('loaded')
+      ? 'emerald'
+      : statusLower.includes('error') || statusLower.includes('failed')
+        ? 'amber'
+        : 'stone';
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-violet-50/80 to-stone-50 py-10 px-4">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">
-              Connect your chaos
-            </h1>
-            <p className="mt-1 text-sm text-stone-600 max-w-xl">
-              Chats → export or paste. <strong>小红书 / TikTok 收藏</strong> → paste link + what you see on
-              screen (there is <strong>no</strong> stable third‑party “sync my favorites” API for us). iMessage
-              demo is <strong>simulated</strong>; real Mac path is Photon. Honest scope:{' '}
-              <Link to="/" className="text-violet-700 underline">
-                GOAL.md
-              </Link>
-              .
-            </p>
+    <div className="min-h-screen bg-gradient-to-b from-violet-50/80 to-stone-50 px-4 py-10">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-8 text-center">
+          <div className="mb-3">
+            <Link
+              to="/dashboard"
+              className="inline-flex rounded-xl border border-violet-200 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 transition hover:border-violet-300 hover:text-violet-900"
+            >
+              Back to Dashboard
+            </Link>
           </div>
-          <Link
-            to="/dashboard"
-            className="shrink-0 text-sm font-medium text-violet-700 hover:text-violet-900"
-          >
-            ← Dashboard
-          </Link>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Connect your chaos</h1>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-stone-600">
+            Pick a source card, paste content, and ingest. Visual-first flow, minimal copy.
+          </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 mb-8">
+        <div className="mb-4 flex justify-center gap-2">
+          <StatusBadge tone="violet" className="normal-case tracking-normal">
+            Centered workflow
+          </StatusBadge>
+          <StatusBadge tone="stone" className="normal-case tracking-normal">
+            Select source - paste - ingest
+          </StatusBadge>
+        </div>
+
+        <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {SOURCES.map((s) => (
-            <button
+            <BentoCard
               key={s.id}
-              type="button"
+              as="button"
               onClick={() => pickSource(s.id)}
-              className={`text-left rounded-2xl border p-4 transition shadow-sm ${
+              className={`w-full p-0 text-left transition ${
                 selected === s.id
-                  ? 'border-violet-500 bg-white ring-2 ring-violet-200'
-                  : 'border-stone-200 bg-white/90 hover:border-stone-300'
+                  ? 'border-violet-400 bg-violet-50/60 ring-2 ring-violet-200'
+                  : 'hover:border-violet-200 hover:bg-white'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-stone-900">{s.title}</span>
-                {s.badge && (
-                  <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                    {s.badge}
-                  </span>
+              <div className="overflow-hidden rounded-t-2xl border-b border-violet-100/80 bg-violet-50/40">
+                {SOURCE_FIGURES[s.id]}
+              </div>
+              <div className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-stone-900">{s.title}</span>
+                  {s.badge && (
+                    <StatusBadge tone="amber" className="normal-case tracking-normal text-[10px]">
+                      {s.badge}
+                    </StatusBadge>
+                  )}
+                </div>
+                <p className="mt-1 text-xs leading-snug text-stone-500">{s.subtitle}</p>
+                {selected === s.id && (
+                  <div className="mt-3">
+                    <StatusBadge tone="violet">Selected</StatusBadge>
+                  </div>
                 )}
               </div>
-              <p className="mt-1 text-xs text-stone-500 leading-snug">{s.subtitle}</p>
-            </button>
+            </BentoCard>
           ))}
         </div>
 
-        <form
-          onSubmit={handleIngest}
-          className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-            <label className="text-sm font-medium text-stone-800">
-              {selected ? 'Content to ingest' : 'Pick a source above'}
-            </label>
-            {(selected === 'wechat_export' ||
-              selected === 'whatsapp_export' ||
-              selected === 'paste_chat' ||
-              selected === 'xhs_favorites' ||
-              selected === 'tiktok_favorites') && (
-              <label className="text-xs text-violet-700 font-medium cursor-pointer">
-                <input
-                  type="file"
-                  accept=".txt,text/plain"
-                  className="hidden"
-                  onChange={handleFile}
-                />
-                <span className="underline">Load .txt file</span>
+        <BentoCard className="mx-auto max-w-3xl">
+          <form onSubmit={handleIngest}>
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="text-sm font-medium text-stone-800">
+                {selected ? 'Paste content' : 'Pick a source to start'}
               </label>
-            )}
-          </div>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            disabled={!selected}
-            rows={12}
-            placeholder={
-              !selected
-                ? 'Select a source to enable the editor.'
-                : selected === 'screenshot_caption'
-                  ? 'e.g. 抹茶专门店 @Sawtelle，人均$12，周末排队…'
-                  : selected === 'xhs_favorites'
-                    ? '链接 + 标题 + 地点 + 你为什么收藏…'
-                    : selected === 'tiktok_favorites'
-                      ? 'Paste TikTok share URL + caption / 店名 from the video…'
-                      : 'Paste chat export, notes, or links…'
-            }
-            className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:bg-stone-50 disabled:text-stone-400 font-mono"
-          />
-          {(selected === 'xhs_favorites' || selected === 'tiktok_favorites') && (
-            <p className="mt-2 text-xs text-stone-500 leading-relaxed">
-              Pitch line: we turn <strong>收藏 / Saved</strong> into structured memory — not by secretly scraping
-              the app, but by ingesting <strong>what you already can copy</strong> (and later Vision on
-              screenshots). Bulk personal-data exports are a separate, slow compliance path — fine to mention,
-              not to fake as instant OAuth.
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={!selected || !content.trim() || submitting}
-              className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50"
-            >
-              {submitting ? 'Sending to brain…' : 'Ingest into Recall'}
-            </button>
-            {status && (
-              <span className="text-sm text-stone-600" role="status">
-                {status}
-              </span>
-            )}
-          </div>
-        </form>
+              {(selected === 'wechat_export' ||
+                selected === 'whatsapp_export' ||
+                selected === 'paste_chat' ||
+                selected === 'xhs_favorites' ||
+                selected === 'tiktok_favorites') && (
+                <label className="cursor-pointer text-xs font-medium text-violet-700">
+                  <input
+                    type="file"
+                    accept=".txt,text/plain"
+                    className="hidden"
+                    onChange={handleFile}
+                  />
+                  <span className="underline">Upload .txt</span>
+                </label>
+              )}
+            </div>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              disabled={!selected}
+              rows={10}
+              placeholder={
+                !selected
+                  ? 'Select a source card to enable input.'
+                  : selected === 'screenshot_caption'
+                    ? 'Caption + place names from screenshot...'
+                    : selected === 'xhs_favorites'
+                      ? '链接 + 标题 + 地点...'
+                      : selected === 'tiktok_favorites'
+                        ? 'Share link + caption + place...'
+                        : 'Paste chat export, note, or link...'
+              }
+              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-mono text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:bg-stone-50 disabled:text-stone-400"
+            />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="submit"
+                disabled={!selected || !content.trim() || submitting}
+                className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
+              >
+                {submitting ? 'Sending...' : 'Ingest into Recall'}
+              </button>
+              {status && (
+                <span className="inline-flex items-center gap-2 text-sm text-stone-600" role="status">
+                  <StatusBadge tone={statusTone}>{statusTone === 'amber' ? 'Notice' : 'Status'}</StatusBadge>
+                  {status}
+                </span>
+              )}
+            </div>
+          </form>
+        </BentoCard>
       </div>
     </div>
   );

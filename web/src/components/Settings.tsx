@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { supabase } from '@/lib/supabase';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { User } from '@supabase/supabase-js';
 
 interface SettingsProps {
@@ -17,7 +17,7 @@ export default function Settings({ user }: SettingsProps) {
   useEffect(() => {
     if (user) {
       const fetchProfile = async () => {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('users')
           .select('notion_token, notion_database_id')
           .eq('id', user.id)
@@ -31,7 +31,7 @@ export default function Settings({ user }: SettingsProps) {
     }
   }, [user]);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
@@ -55,46 +55,56 @@ export default function Settings({ user }: SettingsProps) {
   return (
     <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
       <Dialog.Trigger asChild>
-        <button className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700">
+        <button className="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-medium text-violet-700 transition hover:border-violet-300 hover:text-violet-900">
           Settings
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="bg-black/40 data-[state=open]:animate-overlayShow fixed inset-0" />
-        <Dialog.Content className="data-[state=open]:animate-contentShow fixed top-[50%] left-[50%] max-h-[85vh] w-[90vw] max-w-[450px] translate-x-[-50%] translate-y-[-50%] rounded-[6px] bg-white p-[25px] shadow-[hsl(206_22%_7%_/_35%)_0px_10px_38px_-10px,_hsl(206_22%_7%_/_20%)_0px_10px_20px_-15px] focus:outline-none">
-          <Dialog.Title className="text-mauve12 m-0 text-[17px] font-medium">Notion Settings</Dialog.Title>
-          <Dialog.Description className="text-mauve11 mt-[10px] mb-5 text-[15px] leading-normal">Update your Notion integration details here.</Dialog.Description>
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[1px]" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[92vw] max-w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-violet-100 bg-white p-6 shadow-xl shadow-violet-200/50 focus:outline-none">
+          <Dialog.Title className="m-0 text-lg font-semibold text-stone-900">Notion Settings</Dialog.Title>
+          <Dialog.Description className="mb-5 mt-2 text-sm leading-normal text-stone-600">
+            Update your Notion integration details here.
+          </Dialog.Description>
           <form onSubmit={handleSave}>
-            <fieldset className="mb-[15px] w-full flex flex-col justify-start">
-              <label className="text-violet11 mb-2.5 text-[15px]" htmlFor="notion-token">Notion API Token</label>
+            <fieldset className="mb-4 flex w-full flex-col">
+              <label className="mb-2 text-sm font-medium text-stone-700" htmlFor="notion-token">
+                Notion API Token
+              </label>
               <input
-                className="text-violet11 shadow-violet7 focus:shadow-violet8 inline-flex h-[35px] w-full flex-1 items-center justify-center rounded-[4px] px-[10px] text-[15px] leading-none shadow-[0_0_0_1px] outline-none focus:shadow-[0_0_0_2px]"
+                className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm text-stone-800 outline-none transition focus:border-violet-300 focus:ring-2 focus:ring-violet-200"
                 id="notion-token"
                 value={notionToken}
                 onChange={(e) => setNotionToken(e.target.value)}
                 placeholder="secret_..."
               />
             </fieldset>
-            <fieldset className="mb-[15px] w-full flex flex-col justify-start">
-              <label className="text-violet11 mb-2.5 text-[15px]" htmlFor="notion-db-id">Notion Database ID</label>
+            <fieldset className="mb-4 flex w-full flex-col">
+              <label className="mb-2 text-sm font-medium text-stone-700" htmlFor="notion-db-id">
+                Notion Database ID
+              </label>
               <input
-                className="text-violet11 shadow-violet7 focus:shadow-violet8 inline-flex h-[35px] w-full flex-1 items-center justify-center rounded-[4px] px-[10px] text-[15px] leading-none shadow-[0_0_0_1px] outline-none focus:shadow-[0_0_0_2px]"
+                className="h-10 w-full rounded-xl border border-stone-200 px-3 text-sm text-stone-800 outline-none transition focus:border-violet-300 focus:ring-2 focus:ring-violet-200"
                 id="notion-db-id"
                 value={notionDatabaseId}
                 onChange={(e) => setNotionDatabaseId(e.target.value)}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
               />
             </fieldset>
-            <div className="mt-[25px] flex justify-end">
-              <button type="submit" disabled={loading} className="bg-green4 text-green11 hover:bg-green5 focus:shadow-green7 inline-flex h-[35px] items-center justify-center rounded-[4px] px-[15px] font-medium leading-none focus:shadow-[0_0_0_2px] focus:outline-none disabled:opacity-50">
-                {loading ? 'Saving...' : 'Save changes'}
+            <div className="mt-6 flex justify-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-violet-600 px-4 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>
-          {message && <div className="mt-4 text-center text-sm text-gray-600">{message}</div>}
+          {message && <div className="mt-4 text-center text-sm text-stone-600">{message}</div>}
           <Dialog.Close asChild>
             <button
-              className="text-violet11 hover:bg-violet4 focus:shadow-violet7 absolute top-[10px] right-[10px] inline-flex h-[25px] w-[25px] appearance-none items-center justify-center rounded-full focus:shadow-[0_0_0_2px] focus:outline-none"
+              className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 transition hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-200"
               aria-label="Close"
             >
               &times;
