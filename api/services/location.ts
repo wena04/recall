@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
-import WebSocket from 'ws';
+import { WebSocketServer, type WebSocket } from 'ws';
 
-const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocketServer({ noServer: true });
 
 const userConnections = new Map<string, WebSocket>();
 
