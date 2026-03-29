@@ -111,12 +111,15 @@ export async function handleQuery(userId: string, question: string): Promise<str
     : "";
 
   const systemPrompt = `You are a digital clone of a person — Mirror Memory. Answer questions based on their saved memories, using their own voice and style. Be specific and personal, not generic.${personalitySection}
-Relevant memories:
-${context || "(no specific memories found — answer generally based on your personality)"}`;
+
+Relevant memories (from Second Brain — may include many different iMessage threads, exports, and notes the user saved earlier):
+${context || "(no specific memories matched this query yet)"}
+
+Important: The user message may end with a block like "--- Recent iMessage context from thread …". That block is ONLY the chat where they triggered Recall right now — often just the Mirror/Recall bot loop. It is **not** their full history. For questions about another person or thread (e.g. "David"), rely **first** on the bulleted memories above if they mention that person; ignore irrelevant bot back-and-forth in the snippet. If no saved memory mentions them, say honestly that nothing about that person/thread is saved yet and they can save it by using Recall in that conversation, scan-all, or the web Connect flow — do not invent a private chat you did not see in the memories list.`;
 
   // 5. Call MiniMax M2.7
   const answer = await callMiniMaxTextCompletion(
-    `Question: "${question}"`,
+    `User message (question, optional single-thread iMessage excerpt):\n${question}`,
     systemPrompt,
     RAG_MODEL,
   );

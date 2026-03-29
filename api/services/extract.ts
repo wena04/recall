@@ -30,7 +30,20 @@ export const ExtractionSchema = z.object({
   action_items: z.array(z.object({ task: z.string(), owner: z.string() })),
   source_context: z.string(),
   persona: PersonaSchema.nullable().optional(),
-  recall_enrichment: z.union([RecallEnrichmentSchema, z.null()]).optional(),
+  recall_enrichment: z
+    .any()
+    .transform((val) => {
+      // If LLM returns an object, try to parse it.
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        const parsed = RecallEnrichmentSchema.safeParse(val);
+        if (parsed.success) {
+          return parsed.data;
+        }
+      }
+      // Otherwise (string, array, junk, or unparsable object), default to null.
+      return null;
+    })
+    .optional(),
 });
 
 export type ExtractionResult = z.infer<typeof ExtractionSchema>;

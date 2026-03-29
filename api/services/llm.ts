@@ -242,6 +242,47 @@ export async function callMiniMaxTextCompletion(
 }
 
 /**
+ * Native chatcompletion_v2 with explicit model — use for models not on the Anthropic compat layer (e.g. M2-her).
+ */
+export async function callMiniMaxChatCompletionNative(
+  userText: string,
+  systemPrompt: string,
+  model: string,
+  maxTokens = 2048,
+): Promise<string> {
+  if (!MINIMAX_API_KEY) throw new Error("MINIMAX_API_KEY is not set");
+
+  const response = await fetch(chatCompletionV2Url(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${MINIMAX_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature: 0.85,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userText },
+      ],
+    }),
+  });
+
+  const rawText = await response.text();
+  let data: unknown;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    throw new Error(`MiniMax Native: non-JSON (${response.status}): ${rawText.slice(0, 300)}`);
+  }
+  if (!response.ok) {
+    throw new Error(`MiniMax Native HTTP ${response.status}: ${rawText.slice(0, 300)}`);
+  }
+  return extractTextFromChatCompletionBody(data);
+}
+
+/**
  * Native chatcompletion_v2 (used for vision; Anthropic compat does not support images yet).
  */
 async function callMiniMaxChatCompletionV2(
@@ -285,6 +326,21 @@ async function callMiniMaxChatCompletionV2(
 }
 
 /**
+ * Embeddings are on the native `/v1` API, not the Anthropic-compatible `/anthropic` host.
+ * If MINIMAX_BASE_URL was set to `.../anthropic` (common mistake), legacy base would 404 on `/embeddings`.
+ */
+function resolveMiniMaxEmbeddingsBaseUrl(): string {
+  const trim = (s: string) => s.replace(/\/$/, '');
+  const explicit = process.env.MINIMAX_EMBEDDINGS_BASE_URL?.trim();
+  if (explicit) return trim(explicit);
+  const legacy = process.env.MINIMAX_LEGACY_BASE_URL?.trim();
+  if (legacy && !/\/anthropic\/?$/i.test(legacy)) return trim(legacy);
+  const baseUrl = process.env.MINIMAX_BASE_URL?.trim();
+  if (baseUrl && !/\/anthropic\/?$/i.test(baseUrl)) return trim(baseUrl);
+  return 'https://api.minimax.io/v1';
+}
+
+/**
  * MiniMax embedding API — returns 1536-dim float vectors.
  * Use type="db" when storing, type="query" when searching.
  */
@@ -296,7 +352,7 @@ export async function callMiniMaxEmbedding(
     throw new Error('MINIMAX_API_KEY is not set');
   }
 
-  const base = MINIMAX_LEGACY_BASE_URL.replace(/\/$/, '');
+  const base = resolveMiniMaxEmbeddingsBaseUrl();
   const url = MINIMAX_GROUP_ID
     ? `${base}/embeddings?GroupId=${MINIMAX_GROUP_ID}`
     : `${base}/embeddings`;
@@ -323,11 +379,16 @@ export async function callMiniMaxEmbedding(
   }
 
   const d = data as Record<string, unknown>;
-  const vectors = d.vectors as number[][] | undefined;
-  if (!Array.isArray(vectors) || vectors.length === 0) {
-    throw new Error(`MiniMax Embedding: unexpected response shape: ${JSON.stringify(d).slice(0, 300)}`);
+  const vectors = d.vectors as number[][] | null | undefined;
+  if (Array.isArray(vectors) && vectors.length > 0) return vectors;
+
+  const baseResp = d.base_resp as { status_code?: number; status_msg?: string } | undefined;
+  if (baseResp?.status_msg) {
+    throw new Error(
+      `MiniMax Embedding: ${baseResp.status_msg}${baseResp.status_code != null ? ` (code ${baseResp.status_code})` : ''}`,
+    );
   }
-  return vectors;
+  throw new Error(`MiniMax Embedding: unexpected response shape: ${JSON.stringify(d).slice(0, 300)}`);
 }
 
 export async function extractContent(

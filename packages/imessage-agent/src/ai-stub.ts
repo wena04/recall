@@ -134,9 +134,7 @@ export async function processRecall(
       '',
       `📋 ${msgCount} messages from: ${senders.join(', ')}`,
       '',
-      '✅ Set SECOND_BRAIN_API_URL + USER_ID so transcripts hit MiniMax + Supabase.',
-      '',
-      '⚠️ Stub mode',
+      'This is not AI — Mirror Memory did not run. Set SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID for the agent, keep `npm run dev` running.',
     ].join('\n'),
   );
 }

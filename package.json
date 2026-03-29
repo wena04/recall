@@ -13,7 +13,8 @@
     "preview": "vite preview --config web/vite.config.ts",
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
-    "dev": "concurrently --names \"web,api,agent,notify\" --prefix-colors \"cyan,green,magenta,yellow\" \"npm run client:dev\" \"npm run server:dev\" \"npm run agent:start\" \"npm run agent:notify-poll\"",
+    "dev": "concurrently --names \"web,api,agent\" --prefix-colors \"cyan,green,magenta\" \"npm run client:dev\" \"npm run server:dev\" \"npm run agent:start\"",
+
     "agent:start": "npm run start -w imessage-agent",
     "agent:dev": "npm run dev -w imessage-agent",
     "agent:test:imessage": "npm run test:imessage -w imessage-agent",
@@ -21,6 +22,7 @@
     "agent:test:watch": "npm run test:watch -w imessage-agent",
     "agent:scan-all": "npm run scan-all -w imessage-agent",
     "agent:notify-poll": "npm run notify-poll -w imessage-agent",
+    "agent:serve": "npm run serve -w imessage-agent",
     "demo:load": "tsx demo/load-fixtures.ts",
     "ingest:kalshi": "tsx scripts/ingest-kalshi-csv.ts",
     "data:reassign-user": "tsx scripts/reassign-all-data-to-user.ts",
@@ -28,7 +30,8 @@
     "dev:smoke-api": "tsx scripts/smoke-api.ts",
     "ingest:local": "tsx scripts/bulk-ingest-local.ts",
     "ingest:parse-cn": "python3 scripts/ingest/parse_cn_us_posts.py",
-    "ingest:seed": "tsx scripts/ingest/seed-posts.ts"
+    "ingest:seed": "tsx scripts/ingest/seed-posts.ts",
+    "seed:presentation": "tsx scripts/seed-presentation-script.ts"
   },
   "dependencies": {
     "@notionhq/client": "^5.14.0",

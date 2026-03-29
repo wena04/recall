@@ -287,9 +287,16 @@ async function handleMessage(message: any, isGroup: boolean) {
       if (mirror.ok) {
         await sdk.send(to, formatMirrorMemoryReply(mirror.answer, chatLabel));
       } else {
+        const stub = await processRecall([], sender, isQuick);
         await sdk.send(
           to,
-          `Couldn’t load thread history. Mirror Memory: ${mirror.error}\n\n${await processRecall([], sender, isQuick)}`,
+          [
+            `⚠️ Mirror Memory failed: ${mirror.error}`,
+            '',
+            'Set SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID and run `npm run dev` (API on :3001).',
+            '',
+            stub,
+          ].join('\n'),
         );
       }
       console.log('   ✅ Done (empty thread)');
@@ -322,7 +329,14 @@ async function handleMessage(message: any, isGroup: boolean) {
       replyText = formatMirrorMemoryReply(mirror.answer, chatLabel);
     } else {
       console.warn('   ⚠ Mirror Memory failed:', mirror.error, '— falling back to offline stub');
-      replyText = await processRecall(messages, sender, isQuick);
+      const stub = await processRecall(messages, sender, isQuick);
+      replyText = [
+        `⚠️ Mirror Memory failed: ${mirror.error}`,
+        '',
+        'Fix: in `packages/imessage-agent/.env` (or repo root `.env`) set `SECOND_BRAIN_API_URL=http://127.0.0.1:3001` and `SECOND_BRAIN_USER_ID` to your Supabase user id (Connect page → copy). Run `npm run dev` so the API is up on that port.',
+        '',
+        stub,
+      ].join('\n');
     }
 
     await sdk.send(to, replyText);
@@ -335,20 +349,25 @@ async function handleMessage(message: any, isGroup: boolean) {
 }
 
 // ─── WebSocket-triggered scan (from Connect page) ────────
-async function handleScanAll(): Promise<void> {
+let scanAbortRequested = false;
+
+async function handleScanAll(scanUserId?: string): Promise<void> {
   console.log('\n📡 Received scan_all from backend — starting full chat scan...');
   const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '');
-  const userId = process.env.SECOND_BRAIN_USER_ID;
+  const userId = (scanUserId && String(scanUserId).trim()) || process.env.SECOND_BRAIN_USER_ID;
   if (!base || !userId) {
-    console.warn('   ⚠ scan_all: SECOND_BRAIN_API_URL or SECOND_BRAIN_USER_ID not set, aborting');
+    console.warn('   ⚠ scan_all: SECOND_BRAIN_API_URL or userId missing, aborting');
     return;
   }
+  scanAbortRequested = false;
   try {
     const result = await scanAllChatsAndIngest(sdk, {
       maxChats: RECALL_MAX_CHATS_SCAN,
       messagesPerChat: RECALL_MESSAGES_PER_CHAT_SCAN,
       delayMs: RECALL_INGEST_DELAY_MS,
       demoHint: RECALL_DEMO_HINT || undefined,
+      userId,
+      shouldAbort: () => scanAbortRequested,
       onProgress: (p) => {
         fetch(`${base}/api/imessage/scan-progress`, {
           method: 'POST',
@@ -360,9 +379,23 @@ async function handleScanAll(): Promise<void> {
     await fetch(`${base}/api/imessage/scan-complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, success: true, result: { scanned: result.scanned, ingested: result.ingested, skippedEmpty: result.skippedEmpty, failed: result.failed } }),
+      body: JSON.stringify({
+        userId,
+        success: true,
+        cancelled: !!result.cancelled,
+        result: {
+          scanned: result.scanned,
+          ingested: result.ingested,
+          skippedEmpty: result.skippedEmpty,
+          failed: result.failed,
+        },
+      }),
     });
-    console.log(`   ✅ scan_all complete: ${result.ingested} ingested, ${result.skippedEmpty} skipped-empty, ${result.failed} failed / ${result.scanned} scanned`);
+    console.log(
+      result.cancelled
+        ? `   ⏹ scan stopped early: ${result.ingested} ingested / ${result.scanned} scanned`
+        : `   ✅ scan_all complete: ${result.ingested} ingested, ${result.skippedEmpty} skipped-empty, ${result.failed} failed / ${result.scanned} scanned`,
+    );
     if (result.errors.length > 0) console.warn('   Errors:', result.errors.slice(0, 5));
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
@@ -433,14 +466,58 @@ async function handleOwnMessage(message: any): Promise<void> {
 }
 
 // ─── Backend WebSocket (auto-reconnect) ──────────────────
-const WS_URL = `ws://localhost:3001?userId=${process.env.SECOND_BRAIN_USER_ID}`;
 const WS_RECONNECT_MS = 5000;
 
+/**
+ * WebSocket registers this Mac as the shared iMessage scanner (`?agent=imessage`).
+ * The logged-in user id is sent in each `scan_all` message — no per-user UUID in .env for Connect.
+ */
+function withAgentQuery(u: URL): string {
+  u.searchParams.set('agent', 'imessage');
+  return u.toString();
+}
+
+function buildAgentWebSocketUrl(): string | null {
+  const wsExplicit = process.env.SECOND_BRAIN_WS_URL?.trim();
+  if (wsExplicit) {
+    try {
+      const u = new URL(/^\w+:\/\//.test(wsExplicit) ? wsExplicit : `ws://${wsExplicit}`);
+      return withAgentQuery(u);
+    } catch {
+      console.warn('⚠  SECOND_BRAIN_WS_URL is invalid:', wsExplicit);
+      return null;
+    }
+  }
+
+  const apiRaw = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '') || 'http://localhost:3001';
+  try {
+    const httpUrl = new URL(apiRaw);
+    const local = httpUrl.hostname === 'localhost' || httpUrl.hostname === '127.0.0.1';
+    if (local) {
+      httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+      httpUrl.search = '';
+      return withAgentQuery(httpUrl);
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const port = process.env.SECOND_BRAIN_LOCAL_API_PORT?.trim() || '3001';
+  const u = new URL(`ws://127.0.0.1:${port}`);
+  console.warn(
+    `⚠  SECOND_BRAIN_API_URL is not localhost — WebSocket default ${u.origin}?agent=imessage (set SECOND_BRAIN_WS_URL to override).`,
+  );
+  return withAgentQuery(u);
+}
+
 function connectBackendWs(): void {
-  const ws = new WebSocket(WS_URL);
+  const url = buildAgentWebSocketUrl();
+  if (!url) return;
+
+  const ws = new WebSocket(url);
 
   ws.on('open', () => {
-    console.log('🟢 Connected to backend for notifications');
+    console.log('🟢 Connected to backend (local iMessage agent)', url);
   });
 
   ws.on('message', (data) => {
@@ -450,7 +527,11 @@ function connectBackendWs(): void {
         console.log('📬 Received notification:', message.message);
         sdk.send(process.env.RECALL_IMESSAGE_TARGET || '', message.message);
       } else if (message.type === 'scan_all') {
-        handleScanAll(); // fire-and-forget
+        const uid = typeof message.userId === 'string' && message.userId.trim() ? message.userId.trim() : undefined;
+        handleScanAll(uid); // fire-and-forget
+      } else if (message.type === 'scan_cancel') {
+        scanAbortRequested = true;
+        console.log('📩 scan_cancel — stopping after current chat (if a scan is running)');
       }
     } catch (error) {
       console.error('Error parsing message from backend:', error);

@@ -39,6 +39,10 @@ export interface ScanAllChatsOptions {
   delayMs: number;
   demoHint?: string;
   onProgress?: (p: ScanAllChatsProgress) => void | Promise<void>;
+  /** Supabase user id for each ingest (defaults to agent env). */
+  userId?: string;
+  /** Return true to stop after the current chat (Connect “Stop scanning”). */
+  shouldAbort?: () => boolean;
 }
 
 export interface ScanAllChatsResult {
@@ -47,6 +51,8 @@ export interface ScanAllChatsResult {
   skippedEmpty: number;
   failed: number;
   errors: string[];
+  /** True if the user stopped the scan early (partial results above are still valid). */
+  cancelled?: boolean;
 }
 
 export async function scanAllChatsAndIngest(
@@ -68,6 +74,16 @@ export async function scanAllChatsAndIngest(
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const totalLimit = Math.min(opts.maxChats * opts.messagesPerChat, 30000);
 
+  opts.onProgress?.({
+    currentChat: 'Reading Messages…',
+    chatsDone: 0,
+    chatsTotal: 0,
+    ingested: 0,
+    skippedEmpty: 0,
+    failed: 0,
+    event: 'Fetching recent iMessage history (can take a minute)…',
+  });
+
   if (debug) {
     console.log(`[scan-debug] Fetching up to ${totalLimit} messages since ${since.toDateString()}...`);
   }
@@ -78,6 +94,19 @@ export async function scanAllChatsAndIngest(
     excludeOwnMessages: false,
     excludeReactions: true,
   });
+
+  if (opts.shouldAbort?.()) {
+    opts.onProgress?.({
+      currentChat: 'Stopped',
+      chatsDone: 0,
+      chatsTotal: 0,
+      ingested: 0,
+      skippedEmpty: 0,
+      failed: 0,
+      event: 'Scan stopped before processing chats.',
+    });
+    return { scanned: 0, ingested: 0, skippedEmpty: 0, failed: 0, errors: [], cancelled: true };
+  }
 
   if (debug) {
     console.log(`[scan-debug] Total messages fetched: ${allMessages.length}`);
@@ -117,6 +146,8 @@ export async function scanAllChatsAndIngest(
     opts.onProgress?.({ currentChat, chatsDone, chatsTotal, ingested, skippedEmpty, failed, event });
   };
 
+  let cancelled = false;
+
   const ingestNoteParts: string[] = [
     'Source: Photon multi-chat scan (one thread per ingest). Extract recall_enrichment and persona when applicable.',
   ];
@@ -124,6 +155,12 @@ export async function scanAllChatsAndIngest(
 
   let scanned = 0;
   for (const [chatId, msgs] of sortedGroups) {
+    if (opts.shouldAbort?.()) {
+      cancelled = true;
+      reportProgress('Stopped', scanned, 'Stopped by user — no more chats will be ingested.');
+      break;
+    }
+
     scanned += 1;
     const label = humanizeChatId(chatId);
     reportProgress(label, scanned - 1, `Scanning ${label}…`);
@@ -157,6 +194,7 @@ export async function scanAllChatsAndIngest(
         chatLabel: label,
         photonChatId: chatId,
         ingestNote: ingestNoteParts.join('\n'),
+        ...(opts.userId ? { userId: opts.userId } : {}),
       });
 
       if (ing.skipped) {
@@ -187,7 +225,13 @@ export async function scanAllChatsAndIngest(
     if (opts.delayMs > 0) {
       await new Promise((r) => setTimeout(r, opts.delayMs));
     }
+
+    if (opts.shouldAbort?.()) {
+      cancelled = true;
+      reportProgress('Stopped', scanned, 'Stopped by user.');
+      break;
+    }
   }
 
-  return { scanned, ingested, skippedEmpty, failed, errors };
+  return { scanned, ingested, skippedEmpty, failed, errors, ...(cancelled ? { cancelled: true } : {}) };
 }

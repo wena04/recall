@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import { callMiniMaxTextCompletion } from "./llm.js";
+import { callMiniMaxChatCompletionNative } from "./llm.js";
 import { reverseGeocodeCity } from "./geocode.js";
 
 /** Use M2-her so notifications feel like they come from the user's own digital twin. */
@@ -190,7 +190,7 @@ Write one short iMessage to yourself reminding you what to check out or remember
 
   let body: string;
   try {
-    body = await callMiniMaxTextCompletion(userPrompt, system, LOCATION_MODEL, LOCATION_MAX_TOKENS);
+    body = await callMiniMaxChatCompletionNative(userPrompt, system, LOCATION_MODEL, LOCATION_MAX_TOKENS);
     body = body.trim().slice(0, 1000);
   } catch (e) {
     console.error("location_ping llm:", e);

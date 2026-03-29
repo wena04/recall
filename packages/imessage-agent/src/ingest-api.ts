@@ -9,6 +9,8 @@ export interface IngestTranscriptOptions {
   photonChatId?: string;
   /** Extra context for MiniMax (demo hints, course names) */
   ingestNote?: string;
+  /** Override `SECOND_BRAIN_USER_ID` (e.g. Connect scan for the logged-in Supabase user). */
+  userId?: string;
 }
 
 export interface IngestTranscriptResult {
@@ -33,7 +35,7 @@ export async function ingestTranscriptToSecondBrain(
   opts?: IngestTranscriptOptions,
 ): Promise<IngestTranscriptResult> {
   const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '');
-  const userId = process.env.SECOND_BRAIN_USER_ID;
+  const userId = opts?.userId?.trim() || process.env.SECOND_BRAIN_USER_ID;
   if (!base || !userId) {
     return { ok: true, skipped: true };
   }
@@ -73,11 +75,29 @@ export async function ingestTranscriptToSecondBrain(
 /** Same RAG path as Dashboard Mirror Memory — `POST /api/query`. */
 export async function queryMirrorMemory(
   question: string,
+  userIdOverride?: string,
 ): Promise<{ ok: true; answer: string } | { ok: false; error: string }> {
   const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '');
-  const userId = process.env.SECOND_BRAIN_USER_ID;
-  if (!base || !userId) {
-    return { ok: false, error: 'SECOND_BRAIN_API_URL or SECOND_BRAIN_USER_ID not set' };
+  const userId = userIdOverride?.trim() || process.env.SECOND_BRAIN_USER_ID;
+  if (!base && !userId) {
+    return {
+      ok: false,
+      error:
+        'Missing both SECOND_BRAIN_API_URL and SECOND_BRAIN_USER_ID in .env (repo root or packages/imessage-agent/)',
+    };
+  }
+  if (!base) {
+    return {
+      ok: false,
+      error: 'Missing SECOND_BRAIN_API_URL — add e.g. http://127.0.0.1:3001 (same port as `npm run dev` API)',
+    };
+  }
+  if (!userId) {
+    return {
+      ok: false,
+      error:
+        'Missing SECOND_BRAIN_USER_ID — paste your Supabase auth user uuid (same as Connect page / Dashboard session)',
+    };
   }
 
   const q = question.trim();

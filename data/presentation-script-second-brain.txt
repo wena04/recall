@@ -1,0 +1,48 @@
+3-Minute Live Presentation Script (English)
+
+Hi judges, we are Second Brain Recall.
+
+Every day, we save useful things in chats: restaurant recommendations, event plans, project ideas, and random notes. The problem is not collecting information, it is recovering it at the right moment. Weeks later, those details are buried in message history, and we either forget them or spend too much time searching.
+
+Second Brain Recall solves this memory gap by turning messy conversation fragments into structured, retrievable memory, and then proactively surfacing that memory when context matters.
+
+Our system has three layers.
+
+First, the web app ingests content from chat text, links, or screenshots and shows a memory dashboard.
+
+Second, the API backend uses MiniMax to extract structured data like summary, category, location, action items, and persona-style signals, then stores them in Supabase.
+
+Third, a Photon iMessage agent connects the messaging channel and delivers notifications inside real conversations.
+
+We use MiniMax APIs with clear role separation:
+• Anthropic-compatible /v1/messages for structured text extraction and memory Q&A,
+• chatcompletion_v2 for vision extraction from screenshots,
+• and an optional model for location reminder copy.
+
+This split gave us better output reliability and faster iteration during the hackathon.
+
+Now let me walk through the core demo flow from start to finish.
+
+Step one: ingestion.
+
+I submit a chat snippet, for example a cafe recommendation in San Francisco.
+
+The backend processes it with MiniMax, classifies it, extracts location context, and saves it as a knowledge item.
+
+Step two: retrieval.
+
+On the dashboard, the new memory appears immediately with category and context.
+
+I can also use Mirror Memory chat to ask natural-language questions against my saved memories.
+
+Step three: proactive recall.
+
+When location reporting is triggered, the backend matches my current city to previously saved location-linked memories, applies notification frequency rules, and queues a reminder.
+
+The Photon agent polls that queue and sends the reminder through iMessage, so the user gets it in the channel they already use every day.
+
+So the value is simple: users no longer need to remember everything or manually search old chats.
+
+Second Brain Recall brings back the right memory at the right time, inside the right interface.
+
+Thank you, and we are happy to take your questions.
