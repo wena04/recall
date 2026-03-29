@@ -72,6 +72,29 @@ export async function ingestTranscriptToSecondBrain(
   }
 }
 
+export async function querySecondBrain(question: string): Promise<string> {
+  const base = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, "");
+  const userId = process.env.SECOND_BRAIN_USER_ID;
+  if (!base || !userId) {
+    return "The Second Brain API is not configured. Please set SECOND_BRAIN_API_URL and SECOND_BRAIN_USER_ID.";
+  }
+
+  try {
+    const res = await fetch(`${base}/api/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, question }),
+    });
+    const j = await res.json();
+    if (!res.ok) {
+      return j.error ?? "Failed to query the Second Brain.";
+    }
+    return j.answer;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
 /** Same RAG path as Dashboard Mirror Memory — `POST /api/query`. */
 export async function queryMirrorMemory(
   question: string,

@@ -71,7 +71,7 @@ export default function Login() {
           }}
           providers={['google']}
           onlyThirdPartyProviders
-          redirectTo={`${window.location.origin}/dashboard`}
+          redirectTo={`${window.location.origin}/auth/callback`}
         />
       </BentoCard>
     </div>

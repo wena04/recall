@@ -2,13 +2,26 @@
 
 **Audience:** Human team + AI coding agents (TRAE, Cursor, Claude).
 
-**Last updated:** 2026-03-28 (kept in sync with **`docs/PROGRESS.md`** after major milestones).
+**Last updated:** 2026-03-29 (kept in sync with **`docs/PROGRESS.md`** after major milestones).
 
 **Rule of Engagement:** This is the immutable product and architecture contract. AI agents must read this file before writing any code to understand the system context, the MVC boundaries, and the data schema.
 
-**Canonical docs in this repo:** **`docs/GOAL.md`** (this file), **`docs/PROGRESS.md`**, and the short feature matrix at repo root **`GOAL.md`**. Do not add parallel architecture files without folding them here or into **PROGRESS**.
+**Canonical docs in this repo:** this file (**`docs/GOAL.md`**) and **`docs/PROGRESS.md`**. Do not add parallel architecture files without folding them here or into **PROGRESS**.
 
-**Frontend vs backend folders:** **Frontend** (React, Vite, Tailwind) lives in **`web/`**. **Backend** (Express, MiniMax orchestration, Supabase server client) lives in **`api/`**. Two separate top-level directories — no need to rename them to `frontend/` and `backend/`.
+**Quick matrix**
+
+| | |
+|--|--|
+| **Progress / shipped / commands** | [`PROGRESS.md`](./PROGRESS.md) |
+| **Web (Vite)** | `web/` → build output `dist/` |
+| **API (Express source)** | `server/api-backend/` |
+| **Vercel serverless bundle** | `api/index.mjs` (run `npm run vercel:bundle-api` after `npm run build`; gitignored) |
+| **iMessage agent (macOS)** | `packages/imessage-agent/` |
+| **DB migrations** | `supabase/migrations/` |
+
+Setup: root **`README.md`**. Env templates: **`.env.example`**, **`packages/imessage-agent/.env.example`**.
+
+**Frontend vs backend:** **Frontend** (React, Vite, Tailwind) lives in **`web/`**. **Backend** source (Express, MiniMax, Supabase service client) lives in **`server/api-backend/`**. **Local dev** runs **`server/dev-api.ts`** (HTTP + WebSocket). **Vercel** uses a bundled **`api/index.mjs`** (esbuild from **`server/vercel-entry.ts`**) — see **`vercel.json`** and **`npm run vercel:bundle-api`**.
 
 ---
 
@@ -49,7 +62,7 @@
 * **Not yet in scope:** Per-building geofencing, sub-mile radius matching, or PostGIS on **`knowledge_items`** unless explicitly added and migrated.
 
 ### Feature 5: The "Mirror Memory" Chatbot (RAG + Persona)
-* **Action:** Users query saved memories from the **Dashboard** widget (**`POST /api/query`**) and (stretch) natively via Photon.
+* **Action:** Users query saved memories from the **Dashboard** widget (**`POST /api/query`**). **iMessage** (**`recall`** in a thread) uses the **same** Mirror Memory pipeline via the macOS agent (**`packages/imessage-agent/`** → **`ingest-api.ts`** / **`queryMirrorMemory`**).
 * **Retrieval (RAG):** Prefer **semantic search**: embed the question, call Supabase RPC **`match_knowledge_items`** (**pgvector** cosine on **`knowledge_items.embedding`**). If that returns nothing, fall back to **FTS / ilike** on **`summary`**, then recent items. Injects **`recall_enrichment`** / **`user_personality.profile`** context when available.
 * **Model:** **`MINIMAX_RAG_MODEL`** via the same Anthropic-compatible Messages path as other text calls — **separate from** ingest **`MINIMAX_MODEL`**.
 * **Persona Injection:** Prompt asks the model to answer in the user’s voice using stored style snippets and optional **`user_personality`** fields — **not** fine-tuning weights on the database.
@@ -66,25 +79,26 @@
 | AI Engine | **MiniMax** — Anthropic-compatible **`/v1/messages`** (text, RAG, location copy); native **`/text/chatcompletion_v2`** (vision) |
 | Native Interface | **Photon** iMessage Kit — **`packages/imessage-agent/`**, macOS |
 | Frontend (View) | **React + Vite + Tailwind CSS** — **`web/`** (Recharts, Radix, **Supabase Auth UI** — Google OAuth on **`/login`**) |
-| Backend (Controller) | **Node.js + Express** — **`api/`** |
+| Backend (Controller) | **Node.js + Express** — **`server/api-backend/`** |
 | Database (Model) | **Supabase (PostgreSQL)** — **`supabase/migrations/`** |
 
 ### 3.2 MVC Enforcement for AI Agents
 
-* **`api/load-env.ts`** must load **repo-root** `.env` **before** any module that reads **`process.env`** (e.g. **`lib/supabase.ts`**). Import it **first** in **`app.ts`**.
-* Keep route handlers in **`api/routes/`** thin. MiniMax, geocoding, location rules, and RAG live in **`api/services/`**.
+* **`server/api-backend/internal/load-env.ts`** loads **repo-root** `.env` **before** modules read **`process.env`**. Import it **first** in **`internal/app.ts`**.
+* Keep route handlers in **`server/api-backend/routes/`** thin. MiniMax, geocoding, location rules, and RAG live in **`server/api-backend/services/`**.
 * Frontend never calls MiniMax directly; only **`/api/*`**.
 
 ### 3.3 Deployment (Vercel)
 
 * **Frontend:** Vite build output → repo root **`dist/`** (see **`web/vite.config.ts`**).
-* **API:** **`api/index.ts`** as serverless handler; **`vercel.json`** rewrites **`/api/*`** → that function and **`/*`** → **`index.html`**.
+* **API:** Bundled **`api/index.mjs`** (serverless); **`vercel.json`** rewrites **`/api/*`** → that function and **`/*`** → **`index.html`**. Build: **`npm run build:vercel`** (`vite` + **`npm run vercel:bundle-api`**).
+* **Client env on Vercel:** **`VITE_SUPABASE_URL`** and **`VITE_SUPABASE_ANON_KEY`** must be set so the browser build can talk to Supabase (anon key is public by design; **never** put **`SUPABASE_SERVICE_KEY`** in `VITE_*`).
 * **`packages/imessage-agent/`** is **not** part of the Vercel deployment (see **`.vercelignore`**). Location **delivery** requires a **Mac** running **`agent:notify-poll`** (or equivalent) against your deployed API URL.
 * **Secrets:** set in Vercel Project → Environment Variables. **Never commit secrets.**
 
-### 3.4 Demo Integrity
+### 3.4 Honest onboarding
 
-Ideal UX is "connect everything in one click." **Build** either a **real** path (Photon, exports, optional local ingest) or a **transparent** simulated onboarding — never silent fake enterprise integrations. Staged fixtures are OK if **disclosed** in UI and pitch (**`demo:load`**, **`demo/sample_data.json`**).
+Ideal UX is "connect everything in one click." **Build** either a **real** path (Photon, exports, **`ingest:local`**) or a **transparent** simulated story in the pitch — never silent fake enterprise integrations.
 
 ### 3.5 Auth & per-user data
 
@@ -96,7 +110,7 @@ Ideal UX is "connect everything in one click." **Build** either a **real** path 
 
 ## 4. The Data Contract (LLM JSON Schema)
 
-During **ingestion**, MiniMax should return JSON matching this shape (see **`api/services/extract.ts`** for the canonical Zod schema):
+During **ingestion**, MiniMax should return JSON matching this shape (see **`server/api-backend/services/extract.ts`** for the canonical Zod schema):
 
 ```json
 {
@@ -123,15 +137,18 @@ For **chat / iMessage transcripts**, **`recall_enrichment`** may be an object wi
 
 ```
 second-brain-recall/
-├── GOAL.md              ← short feature matrix (links here + PROGRESS)
 ├── docs/
-│   ├── GOAL.md          ← this file (North Star)
+│   ├── GOAL.md          ← North Star (this file) + quick matrix at top
 │   └── PROGRESS.md      ← living build state — update after milestones
-├── data/                ← samples, fixtures, raw_posts/ … (see data/README.md)
-├── demo/                ← sample_data.json + demo:load (+ optional FIXTURE_FILE)
+├── data/                ← raw_posts/, local/ (see data/README.md)
 ├── scripts/             ← bulk ingest, parsers → scripts/ingest/
 ├── web/                 ← **frontend** (Vite root); build → ../dist
-├── api/                 ← **backend** — load-env.ts, app.ts, routes/, services/
+├── server/
+│   ├── dev-api.ts       ← local API + WebSocket (not Vercel)
+│   ├── vercel-entry.ts  ← import app for esbuild bundle
+│   └── api-backend/     ← Express: internal/app.ts, routes/, services/, lib/
+├── api/
+│   └── index.mjs        ← generated serverless bundle (gitignored); source: vercel-entry + api-backend
 ├── packages/
 │   └── imessage-agent/  ← Photon agent; scan-all, notify-poll, recall / recall all
 ├── supabase/migrations/
@@ -145,9 +162,9 @@ second-brain-recall/
 | Layer | Path |
 |-------|------|
 | View | `web/src/`, `web/public/` |
-| Controller | `api/routes/`, `api/app.ts` |
-| Model | `supabase/migrations/`, `api/lib/supabase.ts` |
-| Services | `api/services/` |
+| Controller | `server/api-backend/routes/`, `server/api-backend/internal/app.ts` |
+| Model | `supabase/migrations/`, `server/api-backend/lib/supabase.ts` |
+| Services | `server/api-backend/services/` |
 | Messaging | `packages/imessage-agent/` |
 
 ---

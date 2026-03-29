@@ -1,13 +1,13 @@
 # PROGRESS.md — Current state (living document)
 
-**Last updated:** 2026-03-28  
+**Last updated:** 2026-03-29  
 **Package name:** `second-brain-recall` (root `package.json`)
 
 > Update this file after every merge-worthy milestone. **Accuracy over optimism.**
 
-**Read first for coding:** this file. **Read for product contract:** `GOAL.md` (repo root quick matrix + **`docs/GOAL.md`** full blueprint).
+**Read first for coding:** this file. **Read for product contract:** **`docs/GOAL.md`** (quick matrix + full blueprint).
 
-**Where code lives:** **Frontend** → **`web/`** · **Backend** → **`api/`** (thin `routes/`, logic in `services/`).
+**Where code lives:** **Frontend** → **`web/`** · **Backend** → **`server/api-backend/`** (thin `routes/`, logic in `services/`). **Local server:** **`server/dev-api.ts`**. **Vercel:** bundled **`api/index.mjs`** (see **`npm run vercel:bundle-api`**).
 
 ---
 
@@ -19,7 +19,7 @@
 
 1. **Web `/login`** — **Supabase Auth** with **Google OAuth** (`@supabase/auth-ui-react`, redirect to `/dashboard`). Dev bypass still **`VITE_DEV_BYPASS_AUTH`** + **`VITE_DEV_USER_ID`** when enabled.
 2. **Web `/connect`** — paste / samples / `.txt` → **`POST /api/message`** → MiniMax → **`knowledge_items`** (+ optional Notion) + async **`embedKnowledgeItem`** for **pgvector** search.
-3. **Photon** — **`recall`** (per thread) or **`recall all`** (multi-chat, gated by env) → same **`POST /api/message`** with **`chat_label`** / **`ingest_note`**. **Connect UI** can **`POST /api/imessage/scan-trigger`** when the local agent is connected via **WebSocket** (`services/location.ts`); poll **`GET /api/imessage/scan-status`**.
+3. **Photon** — **`recall`** (per thread) or **`recall all`** (multi-chat, gated by env) → thread ingest via **`POST /api/message`** where applicable + **Mirror Memory** answer via **`POST /api/query`** (same RAG as Dashboard). **Self-chat:** if Photon omits **`chatId`**, set **`RECALL_REPLY_FALLBACK`** (see **`packages/imessage-agent/.env.example`**). **Connect UI** can **`POST /api/imessage/scan-trigger`** when the local agent is connected via **WebSocket** (`server/api-backend/services/location.ts`); poll **`GET /api/imessage/scan-status`**.
 4. **Dashboard** — **`GET /api/knowledge_items/:userId`**, **Digital diet** (Recharts), **Mirror Personality** (`PersonalityCard` → **`GET /api/personality/:userId`**, **`POST /api/personality/compute`** SSE), **Mirror Memory** → **`POST /api/query`**; optional **`useLocationReporter`** → **`POST /api/location`** when notifications not **off**.
 5. **Mac + Photon** — **`npm run agent:notify-poll`** polls **`GET /api/notifications/pending/:userId`**, sends iMessage, **`POST .../ack`**.
 
@@ -43,9 +43,9 @@
 - [x] **Mirror Memory Chatbot** (`Chatbot.tsx`) → **`POST /api/query`** (semantic + keyword fallback; see API)
 - [x] **`useLocationReporter`** — ~5 min interval **`POST /api/location`** when frequency ≠ **off** (browser Geolocation; localhost or HTTPS)
 
-### API — `api/`
+### API — `server/api-backend/`
 
-- [x] **`api/load-env.ts`** — loads **repo-root** `.env` **first** in **`app.ts`**
+- [x] **`internal/load-env.ts`** — loads **repo-root** `.env` **first** in **`internal/app.ts`**
 - [x] **`POST /api/message`** — MiniMax (`llm.ts`) + Zod **`extract.ts`** → **`knowledge_items`**; optional Notion; **`embedKnowledgeItem`** (non-blocking) after successful extract
 - [x] Vision path: **`extractContentFromImage`** (`image_base64` + `mime_type`) — no image upload in `/connect` UI
 - [x] **`GET /api/knowledge_items/:userId`** · **`GET /api/health`**
@@ -67,18 +67,16 @@
 
 ### iMessage — `packages/imessage-agent/`
 
-- [x] Watch + **`recall`** / **`recall quick`**; ingest → **`ingestTranscriptToSecondBrain`**
+- [x] Watch + **`recall`** / **`recall quick`** → **`queryMirrorMemory`** (**`POST /api/query`**) + optional background ingest; **`replyTarget`** + **`RECALL_REPLY_FALLBACK`** for self-DM when **`chatId`** is missing; group-name filter applies to **groups only** (DMs not blocked when **`RECALL_GROUP_NAME_CONTAINS`** is set)
 - [x] **`recall all`** when **`RECALL_SCAN_ALL_CHATS=true`** — **`scan-all-chats.ts`**
 - [x] **`npm run agent:scan-all`** — CLI multi-chat ingest (**`run-scan-all.ts`**); **`RECALL_SCAN_DEBUG`**
 - [x] **`npm run agent:notify-poll`** — **`run-notify-poll.ts`** delivers **`notification_outbox`** via Photon
 - [x] Agent can subscribe to API **WebSocket** for **`scan_all`** (driven from **`/api/imessage/scan-trigger`**)
 - [x] README: Full Disk Access, scan-all, notify-poll, env tables
 
-### Tooling / demo data
+### Tooling / ingest
 
-- [x] **`demo/sample_data.json`** — 21 rows, all five categories + optional persona/enrichment; **`data/fixtures/diverse_knowledge_items.json`** copy
-- [x] **`demo:load`** — optional **`FIXTURE_FILE=...`**
-- [x] **`ingest:local`**, **`ingest:parse-cn`**, **`ingest:seed`**, **`ingest:kalshi`**, **`dev:ensure-user`**, **`dev:smoke-api`**
+- [x] **`ingest:local`**, **`ingest:parse-cn`**, **`ingest:seed`**, **`dev:ensure-user`**, **`dev:smoke-api`**
 - [x] **`data:reassign-user`** → **`scripts/reassign-all-data-to-user.ts`** — service-role migration of **`knowledge_items`** / **`notification_outbox`** to a target **`auth.users`** email (for moving off dev UUID)
 
 ---
@@ -87,14 +85,14 @@
 
 | Gap | Notes |
 |-----|--------|
-| **Photon chat RAG** | Mirror Memory is **Dashboard**-first; iMessage-native Q&A not wired. |
+| **Photon UX polish** | iMessage uses same **`/api/query`** as Dashboard; optional deeper Photon-only UX (typing indicators, etc.) not prioritized. |
 | **Vision UI** | **`/connect`** screenshot path is caption/text only; Vision via API body fields. |
 | **Building-level / radius pings** | City + string match on **`location_*`** only; no lat/lng per memory in app logic. |
 | **Migration hygiene** | Duplicate **`0004_*`** and experimental **`0005`** (PostGIS) need team decision before clean **`db push`**. **`0006`** requires **pgvector** enabled (migration runs **`CREATE EXTENSION vector`**). |
 | **Embedding / RPC edge cases** | Ingest and RAG use service client + JSON embedding payloads; confirm **`match_knowledge_items`** behaves with your Supabase/PostgREST version after **`db push`**. |
 | **`/api/auth/*`** | Stubs only; **no** server JWT verification on **`POST /api/*`** — trust **`userId`** in body (hackathon / dev model). |
 | **Notion** | Token + DB ID stored; full two-way sync not product-complete. |
-| **Infinite loop (notify ↔ agent)** | Prefix / dedupe hardening still worth a pass (see root **`GOAL.md`**). |
+| **Infinite loop (notify ↔ agent)** | Prefix / dedupe hardening still worth a pass (see **`docs/GOAL.md`**). |
 
 ---
 
@@ -102,7 +100,7 @@
 
 1. **Consolidate Supabase migrations** — single **`0004`** story + resolve **`0005`** vs **`0006`** ordering if `db push` fails.
 2. **Secure APIs** — verify **`userId`** against Supabase session or signed token for **`/api/location`**, **`/api/query`**, **`/api/notifications/*`**, **`/api/personality/*`**.
-3. **Photon** — optional **`getMessages({ since })`**; pipe **`recall`** questions to **`/api/query`**.
+3. **Photon** — optional **`getMessages({ since })`** for leaner thread fetch.
 4. **Demo polish** — video, honest fixture vs live ingest story.
 
 ---
@@ -188,11 +186,11 @@ See **`.env.example`** and [Anthropic-compatible MiniMax docs](https://platform.
 
 ## Environment variables
 
-**Root `.env`:** MiniMax, Supabase server + Vite, **`PORT`**, dev bypass. **Google OAuth** enabled in **Supabase Dashboard** (provider) + **Site URL / redirect URLs** for your app origin.
+**Root `.env`:** MiniMax, Supabase **service** key + **Vite** vars, **`PORT`**, dev bypass. **Google OAuth** enabled in **Supabase Dashboard** (provider) + **Site URL / redirect URLs** for your app origin.
 
-**Agent `packages/imessage-agent/.env`:** **`SECOND_BRAIN_*`**, **`RECALL_*`**, **`NOTIFY_POLL_INTERVAL_MS`**, **`RECALL_SCAN_ALL_CHATS`**, **`RECALL_SCAN_DEBUG`**, etc.
+**Agent `packages/imessage-agent/.env`:** **`SECOND_BRAIN_*`**, **`RECALL_*`**, **`RECALL_REPLY_FALLBACK`** (self-chat), **`NOTIFY_POLL_INTERVAL_MS`**, **`RECALL_SCAN_ALL_CHATS`**, **`RECALL_SCAN_DEBUG`**, etc.
 
-**Vercel:** mirror root vars; **`agent:notify-poll`** on Mac should point **`SECOND_BRAIN_API_URL`** at deployed API if applicable.
+**Vercel:** Same **server** secrets as root (**`SUPABASE_URL`**, **`SUPABASE_SERVICE_KEY`**, **`MINIMAX_*`**, …) **plus** **`VITE_SUPABASE_URL`** and **`VITE_SUPABASE_ANON_KEY`** for the client build. **`agent:notify-poll`** on Mac sets **`SECOND_BRAIN_API_URL`** to your deployed origin when not using localhost.
 
 ---
 
@@ -203,16 +201,13 @@ npm install
 cp .env.example .env
 npm run dev
 
-USER_ID=<uuid> npm run demo:load
-FIXTURE_FILE=./data/fixtures/diverse_knowledge_items.json USER_ID=<uuid> npm run demo:load
-
 # macOS — Photon
 npm run agent:start
 npm run agent:scan-all
 npm run agent:notify-poll
 ```
 
-Also: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run ingest:local`**, **`npm run data:reassign-user`** (needs **`SUPABASE_SERVICE_KEY`**, **`TARGET_EMAIL`**).
+Also: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run ingest:local`**, **`npm run data:reassign-user`** (needs **`SUPABASE_SERVICE_KEY`**, **`TARGET_EMAIL`**). Seed rows: **`npm run ingest:seed`** (see **`data/README.md`**).
 
 ---
 
@@ -228,4 +223,7 @@ Also: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run i
 
 ## Changelog
 
+- **2026-03-29 (cleanup)** — Removed **`demo/`** (fixture loader + JSON), **`data/samples/`**, **`web/src/data/demoIngestSamples.ts`**; Connect no longer pre-fills simulated paste text or “iMessage group (simulated)” card; **`demo:load`** script removed.
+- **2026-03-29 (later)** — Removed dead **`web/src/components/Empty.tsx`**, unused Vite **`web/src/assets/react.svg`**, optional **`scripts/ingest-kalshi-csv.ts`** + **`ingest:kalshi`** npm script; **`api/.DS_Store`**.
+- **2026-03-29** — Docs + repo layout: backend paths **`server/api-backend/`**, Vercel **`api/index.mjs`**; quick matrix folded into **`docs/GOAL.md`** only (no root **`GOAL.md`**); **`nodemon`** watches **`server/`**; removed duplicate **`Recallhomepage-main 3/`**, duplicate **`data/fixtures/diverse_knowledge_items.json`**, presentation seed script; trimmed **`data/raw_posts/`** samples; iMessage **`RECALL_REPLY_FALLBACK`** + group-filter DM fix documented; Vercel **`VITE_*`** Supabase vars documented.
 - **2026-03-28** — Google OAuth Login; **`0006`** pgvector + **`user_personality`**; **`rag.ts`** semantic search + personality in prompt; **`personality`** routes + **`PersonalityCard`** SSE; **`imessage`** scan-trigger/status + agent WS; ingest **`embedKnowledgeItem`**; **`reassign-all-data-to-user`** script; refreshed gaps (migrations, API auth).

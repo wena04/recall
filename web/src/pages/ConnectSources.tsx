@@ -2,19 +2,12 @@ import { supabase } from "@/lib/supabase";
 import { useNavigate, Link } from "react-router-dom";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import type { User } from "@supabase/supabase-js";
-import {
-  SAMPLE_IMESSAGE_GROUP,
-  SAMPLE_WECHAT_EXPORT,
-  SAMPLE_REDNOTE_SAVED,
-  SAMPLE_TIKTOK_SAVED,
-} from "@/data/demoIngestSamples";
 import { SOURCE_FIGURES } from "@/assets/connect/sourceFigures";
 import { FullDiskAccessModal } from "@/components/FullDiskAccessModal";
 import BentoCard from "@/components/ui/BentoCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 
 type SourceKind =
-  | "imessage_demo"
   | "imessage_photon"
   | "wechat_export"
   | "whatsapp_export"
@@ -47,16 +40,9 @@ const SOURCES: {
     badge: "Local agent",
   },
   {
-    id: "imessage_demo",
-    title: "iMessage group",
-    subtitle: "Demo thread, one-click load.",
-    sourceType: "chat_export",
-    badge: "Simulated",
-  },
-  {
     id: "wechat_export",
     title: "WeChat export",
-    subtitle: "Paste .txt or load sample.",
+    subtitle: "Paste your exported .txt.",
     sourceType: "chat_export",
   },
   {
@@ -247,23 +233,10 @@ export default function ConnectSources() {
       setContent("");
       return;
     }
-    if (id === "imessage_demo") {
-      setContent(SAMPLE_IMESSAGE_GROUP);
-      return;
-    }
-    if (id === "wechat_export") {
-      setContent(SAMPLE_WECHAT_EXPORT);
-      return;
-    }
-    if (id === "xhs_favorites") {
-      setContent(SAMPLE_REDNOTE_SAVED);
-      return;
-    }
-    if (id === "tiktok_favorites") {
-      setContent(SAMPLE_TIKTOK_SAVED);
-      return;
-    }
     if (
+      id === "wechat_export" ||
+      id === "xhs_favorites" ||
+      id === "tiktok_favorites" ||
       id === "whatsapp_export" ||
       id === "paste_chat" ||
       id === "link_note" ||

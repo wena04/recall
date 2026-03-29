@@ -4,7 +4,6 @@ import { FaLink, FaRegImage, FaRegPaste } from 'react-icons/fa6';
 import { SiImessage, SiTiktok, SiWechat, SiWhatsapp, SiXiaohongshu } from 'react-icons/si';
 
 type SourceKind =
-  | 'imessage_demo'
   | 'imessage_photon'
   | 'wechat_export'
   | 'whatsapp_export'
@@ -21,7 +20,6 @@ interface FigureConfig {
 }
 
 const FIGURE_CONFIG: Record<SourceKind, FigureConfig> = {
-  imessage_demo: { Icon: SiImessage, iconClass: 'text-sky-500', ringClass: 'bg-sky-50 ring-sky-100' },
   imessage_photon: { Icon: SiImessage, iconClass: 'text-violet-600', ringClass: 'bg-violet-50 ring-violet-200' },
   wechat_export: { Icon: SiWechat, iconClass: 'text-emerald-500', ringClass: 'bg-emerald-50 ring-emerald-100' },
   whatsapp_export: { Icon: SiWhatsapp, iconClass: 'text-green-500', ringClass: 'bg-green-50 ring-green-100' },
@@ -46,7 +44,6 @@ const renderFigure = (kind: SourceKind): ReactNode => {
 };
 
 export const SOURCE_FIGURES: Record<SourceKind, ReactNode> = {
-  imessage_demo: renderFigure('imessage_demo'),
   imessage_photon: renderFigure('imessage_photon'),
   wechat_export: renderFigure('wechat_export'),
   whatsapp_export: renderFigure('whatsapp_export'),

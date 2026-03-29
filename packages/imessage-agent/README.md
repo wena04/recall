@@ -50,6 +50,7 @@ cp packages/imessage-agent/.env.example packages/imessage-agent/.env
 | `SECOND_BRAIN_INGEST_ON_RECALL` | `true` → transcript → **MiniMax** → **Supabase** in the **background** (same as `/connect`). |
 | `SECOND_BRAIN_API_URL` | e.g. `http://localhost:3001` (API must be running — used for **`POST /api/query`** Mirror Memory + ingest). |
 | `SECOND_BRAIN_USER_ID` | Supabase **`auth.users.id`** UUID (same user as the web app / `VITE_DEV_USER_ID` in dev bypass). |
+| `RECALL_REPLY_FALLBACK` | If Photon omits **`chatId`** / **`sender`** (often in **self-chat**), set your phone or **`iMessage;+1…`** chat id so **`send()`** and history fetch have a target. |
 | `RECALL_THREAD_CONTEXT_LINES` | Optional. Append last **N** lines of this thread to the Mirror Memory question (default `25`). `0` = off. |
 
 **Not “training” models:** each ingest runs **inference** and stores structured rows (`summary`, `persona`, `recall_enrichment` JSON). You can later **retrieve** those rows into prompts (RAG-style)—that is not fine-tuning MiniMax on your DB.

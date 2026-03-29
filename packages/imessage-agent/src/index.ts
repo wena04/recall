@@ -101,8 +101,23 @@ await refreshChatLabels();
 setInterval(refreshChatLabels, CHAT_LABEL_REFRESH_MS);
 
 /** Photon accepts phone/email or group `chatId` for send() — groups need chatId. */
-function replyTarget(message: { chatId?: string; sender?: string }): string {
-  return message.chatId || message.sender || '';
+function replyTarget(message: any): string {
+  const m = message ?? {};
+  const fromMsg =
+    (typeof m.chatId === 'string' && m.chatId.trim()) ||
+    (typeof m.chatIdentifier === 'string' && m.chatIdentifier.trim()) ||
+    (typeof m.chat_id === 'string' && m.chat_id.trim()) ||
+    (typeof m.sender === 'string' && m.sender.trim()) ||
+    '';
+  if (fromMsg) return fromMsg;
+  // Self-DM / some Photon builds omit chatId+sender on outgoing bubbles — set phone or `iMessage;+1…` id.
+  return (process.env.RECALL_REPLY_FALLBACK || '').trim();
+}
+
+function runHandleMessage(msg: any, isGroup: boolean) {
+  void handleMessage(msg, isGroup).catch((err) => {
+    console.error('   ❌ handleMessage failed:', err);
+  });
 }
 
 /**
@@ -184,9 +199,17 @@ async function handleMessage(message: any, isGroup: boolean) {
 
   /** Multi-chat ingest: one API row per thread → multiple categories possible across DB. */
   if (RECALL_ALL_RE.test(text)) {
+    const toAll = replyTarget(message);
+    if (!toAll) {
+      console.error(
+        '   ❌ recall all: no send target (chatId/sender). Set RECALL_REPLY_FALLBACK in .env. Keys:',
+        Object.keys(message ?? {}),
+      );
+      return;
+    }
     if (!RECALL_SCAN_ALL_CHATS) {
       await sdk.send(
-        replyTarget(message),
+        toAll,
         '🧠 Multi-chat scan is off. Set RECALL_SCAN_ALL_CHATS=true in packages/imessage-agent/.env, then say "recall all" again.',
       );
       return;
@@ -197,12 +220,12 @@ async function handleMessage(message: any, isGroup: boolean) {
       !process.env.SECOND_BRAIN_USER_ID
     ) {
       await sdk.send(
-        replyTarget(message),
+        toAll,
         '⚠️ Enable SECOND_BRAIN_INGEST_ON_RECALL + SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID for multi-chat ingest.',
       );
       return;
     }
-    const to = replyTarget(message);
+    const to = toAll;
     await sdk.send(to, `🧠 Scanning up to ${RECALL_MAX_CHATS_SCAN} chats (this may take a few minutes)...`);
     try {
       const result = await scanAllChatsAndIngest(sdk, {
@@ -232,8 +255,9 @@ async function handleMessage(message: any, isGroup: boolean) {
     return;
   }
 
-  if (GROUP_PATTERNS.length > 0) {
-    if (!isGroup || !message.chatId) return;
+  // When set, only *group* threads whose display name matches respond; DMs (incl. self-chat) still work.
+  if (GROUP_PATTERNS.length > 0 && isGroup) {
+    if (!message.chatId) return;
     if (!groupMatchesPatterns(message.chatId)) {
       await refreshChatLabels();
       if (!groupMatchesPatterns(message.chatId)) return;
@@ -242,23 +266,35 @@ async function handleMessage(message: any, isGroup: boolean) {
 
   const sender = message.sender || 'unknown';
   const to = replyTarget(message);
+  if (!to) {
+    console.error(
+      '   ❌ No iMessage send target (chatId/sender). For self-chat, set RECALL_REPLY_FALLBACK to your number or chat id. Keys:',
+      Object.keys(message ?? {}),
+    );
+    return;
+  }
   const chatType = isGroup ? 'Group' : 'DM';
-  const chatLabel = message.chatId
-    ? chatLabelById.get(message.chatId) || humanizeChatId(message.chatId)
+  const idForLabel = message.chatId || to;
+  const chatLabel = idForLabel
+    ? chatLabelById.get(idForLabel) || humanizeChatId(idForLabel)
     : humanizeChatId(to);
 
   console.log(`\n📩 [${chatType}] Recall triggered by ${sender} · ${chatLabel}`);
 
   try {
-    await sdk.send(to, '🧠 Recalling... give me a sec');
+    try {
+      await sdk.send(to, "🧠 Recalling... give me a sec");
+    } catch (e: any) {
+      console.warn("   ⚠️ Could not send 'Recalling' confirmation:", e.message);
+    }
 
-    if (!message.chatId) {
+    if (!message.chatId && !message.chatIdentifier) {
       console.warn(
-        '   ⚠ No chatId on message — using global recent messages (check Photon SDK version).',
+        '   ⚠ No chatId on Photon event — scoping history with resolved send target (self-DM often needs RECALL_REPLY_FALLBACK).',
       );
     }
     const history = await sdk.getMessages({
-      ...(message.chatId ? { chatId: message.chatId } : {}),
+      ...(to ? { chatId: to } : {}),
       limit: MAX_MESSAGES,
       excludeOwnMessages: false,
       excludeReactions: true,
@@ -281,37 +317,16 @@ async function handleMessage(message: any, isGroup: boolean) {
               `[${m.date ?? '?'}] ${m.sender}: ${m.text}`,
           );
 
-    if (messages.length === 0) {
-      const { question: baseQuestion, quick: isQuick } = extractRecallQuestion(rawText);
-      const mirror = await queryMirrorMemory(baseQuestion);
-      if (mirror.ok) {
-        await sdk.send(to, formatMirrorMemoryReply(mirror.answer, chatLabel));
-      } else {
-        const stub = await processRecall([], sender, isQuick);
-        await sdk.send(
-          to,
-          [
-            `⚠️ Mirror Memory failed: ${mirror.error}`,
-            '',
-            'Set SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID and run `npm run dev` (API on :3001).',
-            '',
-            stub,
-          ].join('\n'),
-        );
-      }
-      console.log('   ✅ Done (empty thread)');
-      return;
-    }
-
-    const ingestNoteParts: string[] = [
-      'Source: Photon iMessage thread. Extract recall_enrichment (keywords, places, courses_or_projects, texting_style) and persona for participants.',
+    const { question: baseQuestion, quick: isQuick } = extractRecallQuestion(rawText);
+    const ingestNoteParts = [
+      `iMessage recall · ${chatType} · ${chatLabel}`,
+      ...(RECALL_DEMO_HINT ? [RECALL_DEMO_HINT] : []),
     ];
-    if (RECALL_DEMO_HINT) ingestNoteParts.unshift(RECALL_DEMO_HINT);
 
     if (INGEST_BEFORE_RECALL) {
       void ingestTranscriptToSecondBrain(lines, {
         chatLabel,
-        photonChatId: message.chatId,
+        photonChatId: message.chatId || to,
         ingestNote: ingestNoteParts.join('\n'),
       }).then((ing) => {
         if (ing.ok && !ing.skipped) console.log('   💾 Background thread ingest queued OK');
@@ -319,7 +334,6 @@ async function handleMessage(message: any, isGroup: boolean) {
       });
     }
 
-    const { question: baseQuestion, quick: isQuick } = extractRecallQuestion(rawText);
     const fullQuestion = appendThreadContext(baseQuestion, chatLabel, lines);
 
     const mirror = await queryMirrorMemory(fullQuestion);
@@ -549,6 +563,36 @@ function connectBackendWs(): void {
   });
 }
 
+/** Same race as notify-poll: agent starts with `concurrently` before Express binds :3001. */
+async function waitForLocalApiHealthBeforeWs(maxMs = 60_000): Promise<void> {
+  const raw = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, '') || 'http://127.0.0.1:3001';
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(raw);
+  } catch {
+    return;
+  }
+  const host = baseUrl.hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1') return;
+
+  const deadline = Date.now() + maxMs;
+  let logged = false;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${raw}/api/health`);
+      if (res.ok) return;
+    } catch {
+      if (!logged) {
+        console.log('   Waiting for local API on :3001 before WebSocket…');
+        logged = true;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  console.warn('   Local API not ready — WebSocket may error once and retry.');
+}
+
+await waitForLocalApiHealthBeforeWs();
 connectBackendWs();
 
 // ─── Watch ───────────────────────────────────────────────
@@ -563,12 +607,29 @@ function isOwnMessage(msg: any): boolean {
 
 await sdk.startWatching({
   onDirectMessage: (msg: any) => {
-    if (isOwnMessage(msg)) { handleOwnMessage(msg); return; }
-    handleMessage(msg, false);
+    const raw = String(msg.text ?? '').trim();
+    // Self-chat / your outgoing messages: Photon marks these as "own" — still allow explicit recall.
+    if (isOwnMessage(msg)) {
+      if (isRecallTriggerText(raw)) {
+        runHandleMessage(msg, false);
+        return;
+      }
+      void handleOwnMessage(msg);
+      return;
+    }
+    runHandleMessage(msg, false);
   },
   onGroupMessage: (msg: any) => {
-    if (isOwnMessage(msg)) { handleOwnMessage(msg); return; }
-    handleMessage(msg, true);
+    const raw = String(msg.text ?? '').trim();
+    if (isOwnMessage(msg)) {
+      if (isRecallTriggerText(raw)) {
+        runHandleMessage(msg, true);
+        return;
+      }
+      void handleOwnMessage(msg);
+      return;
+    }
+    runHandleMessage(msg, true);
   },
 });
 

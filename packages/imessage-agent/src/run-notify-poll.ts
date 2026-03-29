@@ -20,6 +20,26 @@ if (!api || !userId) {
 
 const sdk = new IMessageSDK({ debug: false });
 
+/** `npm run dev` starts notify-poll and the API at the same time — API may not be on :3001 yet. */
+async function waitForApiReady(maxWaitMs = 60_000): Promise<void> {
+  const deadline = Date.now() + maxWaitMs;
+  let logged = false;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${api}/api/notifications/pending/${userId}`);
+      if (res.ok || res.status === 400 || res.status === 404) return;
+      return;
+    } catch {
+      if (!logged) {
+        console.log(`notify-poll: waiting for API at ${api} (concurrent dev startup)…`);
+        logged = true;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+  console.warn(`notify-poll: API not reachable at ${api} after ${maxWaitMs / 1000}s — will keep trying each interval.`);
+}
+
 async function tick(): Promise<void> {
   try {
     const res = await fetch(`${api}/api/notifications/pending/${userId}`);
@@ -54,6 +74,7 @@ async function tick(): Promise<void> {
 }
 
 console.log(`📬 notify-poll every ${intervalMs}ms → ${api}`);
+await waitForApiReady();
 await tick();
 setInterval(tick, intervalMs);
 
