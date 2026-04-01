@@ -1,13 +1,22 @@
 import { Router } from "express";
 import { handleQuery } from "../services/rag";
+import {
+  assertTargetUser,
+  requireUserOrAgent,
+  type AuthedRequest,
+} from "../middleware/auth.js";
 
 const router = Router();
 
-router.post("/query", async (req, res) => {
+router.post("/query", requireUserOrAgent, async (req: AuthedRequest, res) => {
   const { userId, question } = req.body;
 
   if (!userId || !question) {
     return res.status(400).json({ error: "userId and question are required" });
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   try {

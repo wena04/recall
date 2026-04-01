@@ -16,6 +16,11 @@
  */
 import 'dotenv/config';
 import { readdir, readFile, stat } from 'node:fs/promises';
+
+function apiAuthHeaders(): Record<string, string> {
+  const s = process.env.RECALL_AGENT_SECRET!.trim();
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${s}` };
+}
 import { join, extname, resolve } from 'node:path';
 
 const TEXT_EXT = new Set(['.txt', '.log', '.md', '.csv', '.text']);
@@ -107,6 +112,10 @@ Start the API first (npm run dev).`);
     console.error('Set USER_ID or VITE_DEV_USER_ID (Supabase auth.users id).');
     process.exit(1);
   }
+  if (!process.env.RECALL_AGENT_SECRET?.trim()) {
+    console.error('Set RECALL_AGENT_SECRET in .env (same as API server).');
+    process.exit(1);
+  }
 
   const allFiles: string[] = [];
   for (const r of roots) await walk(r, allFiles);
@@ -142,7 +151,7 @@ Start the API first (npm run dev).`);
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiAuthHeaders(),
           body: JSON.stringify({
             userId,
             type: 'bulk_local',

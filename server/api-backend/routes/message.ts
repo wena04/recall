@@ -3,6 +3,11 @@ import { supabase } from '../lib/supabase.js';
 import { extractContent, extractContentFromImage } from '../services/llm.js';
 import { createNotionPage } from '../services/notion.js';
 import { embedKnowledgeItem } from '../services/personality.js';
+import {
+  assertTargetUser,
+  requireUserOrAgent,
+  type AuthedRequest,
+} from '../middleware/auth.js';
 
 const router = Router();
 
@@ -11,7 +16,7 @@ function normalizeImageBase64(raw: string): string {
   return m ? m[1] : raw.trim();
 }
 
-router.post('/message', async (req, res) => {
+router.post('/message', requireUserOrAgent, async (req: AuthedRequest, res) => {
   const {
     userId,
     type,
@@ -22,6 +27,10 @@ router.post('/message', async (req, res) => {
     chat_label,
     ingest_note,
   } = req.body;
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
 
   const caption = typeof content === 'string' ? content : '';
   const chatLabel = typeof chat_label === 'string' ? chat_label.trim() : '';

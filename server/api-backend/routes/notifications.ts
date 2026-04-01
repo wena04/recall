@@ -1,13 +1,22 @@
 import { Router } from "express";
 import { supabase } from "../lib/supabase.js";
+import {
+  assertTargetUser,
+  requireUserOrAgent,
+  type AuthedRequest,
+} from "../middleware/auth.js";
 
 const router = Router();
 
 /** Photon agent: undelivered rows + where to send (from user profile). */
-router.get("/notifications/pending/:userId", async (req, res) => {
+router.get("/notifications/pending/:userId", requireUserOrAgent, async (req: AuthedRequest, res) => {
   const { userId } = req.params;
   if (!userId) {
     return res.status(400).json({ error: "Missing userId" });
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const { data: user, error: uerr } = await supabase
@@ -39,11 +48,15 @@ router.get("/notifications/pending/:userId", async (req, res) => {
   });
 });
 
-router.post("/notifications/:id/ack", async (req, res) => {
+router.post("/notifications/:id/ack", requireUserOrAgent, async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const { userId } = req.body;
   if (!userId) {
     return res.status(400).json({ error: "userId required in body" });
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const { data: row, error: fetchErr } = await supabase

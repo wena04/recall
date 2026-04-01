@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -41,7 +42,7 @@ export function useLocationReporter(userId: string | undefined) {
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          void fetch("/api/location", {
+          void apiFetch("/api/location", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

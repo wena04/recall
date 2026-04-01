@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import BentoCard from "./ui/BentoCard";
 
 interface PersonalityProfile {
@@ -46,14 +47,24 @@ export default function PersonalityCard({ userId }: { userId: string }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/personality/${userId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setProfile(d.profile ?? null);
-        setComputedAt(d.computed_at ?? null);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await apiFetch(`/api/personality/${userId}`);
+        const d = await r.json();
+        if (!cancelled) {
+          setProfile(d.profile ?? null);
+          setComputedAt(d.computed_at ?? null);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   const [progressLog, setProgressLog] = useState<string[]>([]);
@@ -64,7 +75,7 @@ export default function PersonalityCard({ userId }: { userId: string }) {
     setProgressLog([]);
 
     try {
-      const res = await fetch("/api/personality/compute", {
+      const res = await apiFetch("/api/personality/compute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),

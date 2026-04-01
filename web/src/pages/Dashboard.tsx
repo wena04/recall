@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useNavigate, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -93,7 +94,7 @@ export default function Dashboard() {
     if (!user) return;
     const run = async () => {
       setLoading(true);
-      const response = await fetch(`/api/knowledge_items/${user.id}`);
+      const response = await apiFetch(`/api/knowledge_items/${user.id}`);
       const { data } = await response.json();
       setKnowledgeItems(data || []);
       setLoading(false);
@@ -156,7 +157,7 @@ export default function Dashboard() {
 
   const handleSaveEdit = async (updated: Partial<KnowledgeItem>) => {
     if (!editingItem) return;
-    const res = await fetch(`/api/knowledge_items/${editingItem.id}`, {
+    const res = await apiFetch(`/api/knowledge_items/${editingItem.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updated),
@@ -170,7 +171,7 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (id: string) => {
-    const res = await fetch(`/api/knowledge_items/${id}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/knowledge_items/${id}`, { method: "DELETE" });
     if (res.ok) {
       setKnowledgeItems((prev) => prev.filter((i) => i.id !== id));
     }

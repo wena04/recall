@@ -1,5 +1,11 @@
 import { Router, type Request, type Response } from 'express';
 import { describeAgentWsStatus, sendScanCancelToAgent, sendScanToAgent } from '../services/location.js';
+import {
+  assertTargetUser,
+  requireAgentSecret,
+  requireUserOrAgent,
+  type AuthedRequest,
+} from '../middleware/auth.js';
 
 type ScanStatus = 'idle' | 'scanning' | 'done' | 'error' | 'cancelled';
 
@@ -27,10 +33,15 @@ const scanStates = new Map<string, ScanState>();
 const router = Router();
 
 /** POST /api/imessage/scan-trigger — tell the local Photon agent to scan all chats */
-router.post('/imessage/scan-trigger', (req: Request, res: Response) => {
+router.post('/imessage/scan-trigger', requireUserOrAgent, (req: AuthedRequest, res: Response) => {
   const { userId } = req.body as { userId?: string };
   if (!userId) {
     res.status(400).json({ error: 'userId is required' });
+    return;
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    res.status(403).json({ error: 'Forbidden' });
     return;
   }
 
@@ -62,10 +73,15 @@ router.post('/imessage/scan-trigger', (req: Request, res: Response) => {
 });
 
 /** POST /api/imessage/scan-cancel — ask the Mac agent to stop the current scan */
-router.post('/imessage/scan-cancel', (req: Request, res: Response) => {
+router.post('/imessage/scan-cancel', requireUserOrAgent, (req: AuthedRequest, res: Response) => {
   const { userId } = req.body as { userId?: string };
   if (!userId) {
     res.status(400).json({ error: 'userId is required' });
+    return;
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    res.status(403).json({ error: 'Forbidden' });
     return;
   }
 
@@ -85,10 +101,15 @@ router.post('/imessage/scan-cancel', (req: Request, res: Response) => {
 });
 
 /** GET /api/imessage/scan-status?userId= — poll scan progress from the Connect page */
-router.get('/imessage/scan-status', (req: Request, res: Response) => {
+router.get('/imessage/scan-status', requireUserOrAgent, (req: AuthedRequest, res: Response) => {
   const userId = req.query.userId as string | undefined;
   if (!userId) {
     res.status(400).json({ error: 'userId query param is required' });
+    return;
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    res.status(403).json({ error: 'Forbidden' });
     return;
   }
 
@@ -97,7 +118,7 @@ router.get('/imessage/scan-status', (req: Request, res: Response) => {
 });
 
 /** POST /api/imessage/scan-progress — live progress update from agent during scan */
-router.post('/imessage/scan-progress', (req: Request, res: Response) => {
+router.post('/imessage/scan-progress', requireAgentSecret, (req: Request, res: Response) => {
   const { userId, progress } = req.body as {
     userId?: string;
     progress?: Omit<ScanProgress, 'log'> & { event?: string };
@@ -137,7 +158,7 @@ router.post('/imessage/scan-progress', (req: Request, res: Response) => {
 });
 
 /** POST /api/imessage/scan-complete — called by the agent after scanAllChatsAndIngest finishes */
-router.post('/imessage/scan-complete', (req: Request, res: Response) => {
+router.post('/imessage/scan-complete', requireAgentSecret, (req: Request, res: Response) => {
   const { userId, success, result, error, cancelled } = req.body as {
     userId?: string;
     success?: boolean;

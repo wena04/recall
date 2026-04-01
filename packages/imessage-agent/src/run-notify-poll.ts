@@ -7,6 +7,7 @@
  * Env: SECOND_BRAIN_API_URL, SECOND_BRAIN_USER_ID, NOTIFY_POLL_INTERVAL_MS (default 30000)
  */
 import "./load-agent-env.js";
+import { recallAgentHeaders } from "./agent-auth-headers.js";
 import { IMessageSDK } from "@photon-ai/imessage-kit";
 
 const api = process.env.SECOND_BRAIN_API_URL?.replace(/\/$/, "");
@@ -26,7 +27,9 @@ async function waitForApiReady(maxWaitMs = 60_000): Promise<void> {
   let logged = false;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${api}/api/notifications/pending/${userId}`);
+      const res = await fetch(`${api}/api/notifications/pending/${userId}`, {
+        headers: recallAgentHeaders(),
+      });
       if (res.ok || res.status === 400 || res.status === 404) return;
       return;
     } catch {
@@ -42,7 +45,9 @@ async function waitForApiReady(maxWaitMs = 60_000): Promise<void> {
 
 async function tick(): Promise<void> {
   try {
-    const res = await fetch(`${api}/api/notifications/pending/${userId}`);
+    const res = await fetch(`${api}/api/notifications/pending/${userId}`, {
+      headers: recallAgentHeaders(),
+    });
     if (!res.ok) {
       console.warn("notify-poll pending HTTP", res.status);
       return;
@@ -59,7 +64,7 @@ async function tick(): Promise<void> {
       await sdk.send(to, `📍 Nearby\n\n${n.body}`);
       const ack = await fetch(`${api}/api/notifications/${n.id}/ack`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: recallAgentHeaders(),
         body: JSON.stringify({ userId }),
       });
       if (!ack.ok) {

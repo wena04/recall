@@ -1,7 +1,9 @@
 /**
  * Forward iMessage history to the Second Brain Express API (same pipeline as /connect).
- * Set SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID in packages/imessage-agent/.env
+ * Set SECOND_BRAIN_API_URL + SECOND_BRAIN_USER_ID + RECALL_AGENT_SECRET (same as server).
  */
+
+import { recallAgentHeaders } from './agent-auth-headers.js';
 
 export interface IngestTranscriptOptions {
   /** Group or DM label from Photon listChats (e.g. INFO 340) */
@@ -46,7 +48,7 @@ export async function ingestTranscriptToSecondBrain(
   try {
     const res = await fetch(`${base}/api/message`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: recallAgentHeaders(),
       body: JSON.stringify({
         userId,
         type: 'photon_ingest',
@@ -82,7 +84,7 @@ export async function querySecondBrain(question: string): Promise<string> {
   try {
     const res = await fetch(`${base}/api/query`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: recallAgentHeaders(),
       body: JSON.stringify({ userId, question }),
     });
     const j = await res.json();
@@ -131,7 +133,7 @@ export async function queryMirrorMemory(
   try {
     const res = await fetch(`${base}/api/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: recallAgentHeaders(),
       body: JSON.stringify({ userId, question: q }),
     });
     const j = (await res.json().catch(() => ({}))) as { error?: string; answer?: string };

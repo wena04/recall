@@ -1,12 +1,21 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { computePersonality } from '../services/personality.js';
+import {
+  assertTargetUser,
+  requireUserOrAgent,
+  type AuthedRequest,
+} from '../middleware/auth.js';
 
 const router = Router();
 
 /** GET /api/personality/:userId — fetch stored profile */
-router.get('/personality/:userId', async (req: Request, res: Response) => {
+router.get('/personality/:userId', requireUserOrAgent, async (req: AuthedRequest, res: Response) => {
   const { userId } = req.params;
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
 
   const { data, error } = await supabase
     .from('user_personality')
@@ -29,11 +38,15 @@ router.get('/personality/:userId', async (req: Request, res: Response) => {
  *   data: {"type":"done","profile":{...}}
  *   data: {"type":"error","message":"..."}
  */
-router.post('/personality/compute', async (req: Request, res: Response) => {
+router.post('/personality/compute', requireUserOrAgent, async (req: AuthedRequest, res: Response) => {
   const { userId } = req.body as { userId?: string };
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: 'Forbidden' });
   }
 
   // Set up SSE headers

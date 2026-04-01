@@ -135,6 +135,15 @@ async function main() {
   console.log(`Mode: ${mode} — ${posts.length} post(s) from ${file}\n`);
 
   if (mode === 'api') {
+    const secret = process.env.RECALL_AGENT_SECRET?.trim();
+    if (!secret) {
+      console.error('Set RECALL_AGENT_SECRET in .env (same as API server) for --mode api');
+      process.exit(1);
+    }
+    const apiHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    };
     const url = `${apiBase.replace(/\/$/, '')}/api/message`;
     let ok = 0;
     let fail = 0;
@@ -144,7 +153,7 @@ async function main() {
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders,
           body: JSON.stringify({
             userId,
             type: 'seed_posts_json',

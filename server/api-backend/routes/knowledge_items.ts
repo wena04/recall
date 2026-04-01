@@ -1,13 +1,22 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
+import {
+  assertTargetUser,
+  requireUserOrAgent,
+  type AuthedRequest,
+} from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/knowledge_items/:userId', async (req, res) => {
+router.get('/knowledge_items/:userId', requireUserOrAgent, async (req: AuthedRequest, res) => {
   const { userId } = req.params;
 
   if (!userId) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  if (!assertTargetUser(req, userId)) {
+    return res.status(403).json({ error: 'Forbidden' });
   }
 
   const { data, error } = await supabase
@@ -22,7 +31,10 @@ router.get('/knowledge_items/:userId', async (req, res) => {
   res.json({ status: 'success', data });
 });
 
-router.patch('/knowledge_items/:id', async (req, res) => {
+router.patch('/knowledge_items/:id', requireUserOrAgent, async (req: AuthedRequest, res) => {
+  if (req.auth?.mode === 'agent') {
+    return res.status(403).json({ error: 'Agent cannot patch items; use the dashboard.' });
+  }
   const { id } = req.params;
   const { summary, category, location_city, location_name } = req.body as {
     summary?: string;
@@ -41,6 +53,7 @@ router.patch('/knowledge_items/:id', async (req, res) => {
     .from('knowledge_items')
     .update(updates)
     .eq('id', id)
+    .eq('user_id', req.auth!.userId)
     .select()
     .single();
 
@@ -51,13 +64,17 @@ router.patch('/knowledge_items/:id', async (req, res) => {
   res.json({ status: 'success', data });
 });
 
-router.delete('/knowledge_items/:id', async (req, res) => {
+router.delete('/knowledge_items/:id', requireUserOrAgent, async (req: AuthedRequest, res) => {
+  if (req.auth?.mode === 'agent') {
+    return res.status(403).json({ error: 'Agent cannot delete items; use the dashboard.' });
+  }
   const { id } = req.params;
 
   const { error } = await supabase
     .from('knowledge_items')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', req.auth!.userId);
 
   if (error) {
     return res.status(500).json({ error: error.message });

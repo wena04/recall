@@ -48,6 +48,7 @@ cp packages/imessage-agent/.env.example packages/imessage-agent/.env
 | `RECALL_DEMO_HINT` | Extra context sent to MiniMax (course names, demo story). |
 | `CHAT_LABEL_REFRESH_MS` | How often to refresh `listChats` cache (default `300000`). |
 | `SECOND_BRAIN_INGEST_ON_RECALL` | `true` → transcript → **MiniMax** → **Supabase** in the **background** (same as `/connect`). |
+| `RECALL_AGENT_SECRET` | Long random string — **must match** repo root / Vercel `RECALL_AGENT_SECRET` (Bearer on all agent → API calls). |
 | `SECOND_BRAIN_API_URL` | e.g. `http://localhost:3001` (API must be running — used for **`POST /api/query`** Mirror Memory + ingest). |
 | `SECOND_BRAIN_USER_ID` | Supabase **`auth.users.id`** UUID (same user as the web app / `VITE_DEV_USER_ID` in dev bypass). |
 | `RECALL_REPLY_FALLBACK` | If Photon omits **`chatId`** / **`sender`** (often in **self-chat**), set your phone or **`iMessage;+1…`** chat id so **`send()`** and history fetch have a target. |

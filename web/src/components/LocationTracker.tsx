@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { apiFetch } from '@/lib/api';
 
 const PING_INTERVAL_MS = 5 * 60 * 1000; // re-ping every 5 minutes even if stationary
 
@@ -6,7 +7,7 @@ export default function LocationTracker({ userId }: { userId: string }) {
   const coordsRef = useRef<GeolocationCoordinates | null>(null);
 
   const sendLocation = (coords: GeolocationCoordinates) => {
-    fetch('/api/location', {
+    void apiFetch('/api/location', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

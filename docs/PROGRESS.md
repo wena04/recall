@@ -90,7 +90,7 @@
 | **Building-level / radius pings** | City + string match on **`location_*`** only; no lat/lng per memory in app logic. |
 | **Migration hygiene** | Duplicate **`0004_*`** and experimental **`0005`** (PostGIS) need team decision before clean **`db push`**. **`0006`** requires **pgvector** enabled (migration runs **`CREATE EXTENSION vector`**). |
 | **Embedding / RPC edge cases** | Ingest and RAG use service client + JSON embedding payloads; confirm **`match_knowledge_items`** behaves with your Supabase/PostgREST version after **`db push`**. |
-| **`/api/auth/*`** | Stubs only; **no** server JWT verification on **`POST /api/*`** — trust **`userId`** in body (hackathon / dev model). |
+| **`/api/auth/*`** | Stubs only. **Other `/api/*`** require **`Authorization: Bearer`** = Supabase access token **or** **`RECALL_AGENT_SECRET`** (Mac agent / scripts). **`userId`** in body must match JWT `sub` unless agent secret (IDOR closed). |
 | **Notion** | Token + DB ID stored; full two-way sync not product-complete. |
 | **Infinite loop (notify ↔ agent)** | Prefix / dedupe hardening still worth a pass (see **`docs/GOAL.md`**). |
 
@@ -223,6 +223,7 @@ Also: **`npm run build`**, **`npm run check`**, **`npm run lint`**, **`npm run i
 
 ## Changelog
 
+- **2026-03-29 (security)** — Supabase migration **`0007`**: users SELECT own row only; **`notification_outbox`** RLS; **`match_knowledge_items`** executable only by **`service_role`**. Express: JWT or **`RECALL_AGENT_SECRET`** on protected routes; **`/imessage/scan-progress|scan-complete`** agent-secret only. Web: **`apiFetch`** + session token; dev bypass needs **`VITE_RECALL_AGENT_SECRET`**. Agent/CLI: send Bearer secret. Applied on hosted DB via MCP + file in **`supabase/migrations/`**.
 - **2026-03-29 (cleanup)** — Removed **`demo/`** (fixture loader + JSON), **`data/samples/`**, **`web/src/data/demoIngestSamples.ts`**; Connect no longer pre-fills simulated paste text or “iMessage group (simulated)” card; **`demo:load`** script removed.
 - **2026-03-29 (later)** — Removed dead **`web/src/components/Empty.tsx`**, unused Vite **`web/src/assets/react.svg`**, optional **`scripts/ingest-kalshi-csv.ts`** + **`ingest:kalshi`** npm script; **`api/.DS_Store`**.
 - **2026-03-29** — Docs + repo layout: backend paths **`server/api-backend/`**, Vercel **`api/index.mjs`**; quick matrix folded into **`docs/GOAL.md`** only (no root **`GOAL.md`**); **`nodemon`** watches **`server/`**; removed duplicate **`Recallhomepage-main 3/`**, duplicate **`data/fixtures/diverse_knowledge_items.json`**, presentation seed script; trimmed **`data/raw_posts/`** samples; iMessage **`RECALL_REPLY_FALLBACK`** + group-filter DM fix documented; Vercel **`VITE_*`** Supabase vars documented.

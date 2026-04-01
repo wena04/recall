@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiFetch } from "@/lib/api";
 import BentoCard from "./ui/BentoCard";
 
 export default function Chatbot({ userId }: { userId: string }) {
@@ -14,7 +15,7 @@ export default function Chatbot({ userId }: { userId: string }) {
     setError("");
 
     try {
-      const response = await fetch("/api/query", {
+      const response = await apiFetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, question }),

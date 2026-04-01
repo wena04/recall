@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { recallAgentHeaders } from './agent-auth-headers.js';
 import { IMessageSDK } from '@photon-ai/imessage-kit';
 import { formatMirrorMemoryReply, processRecall, formatSelfNotification } from './ai-stub.js';
 import { ingestTranscriptToSecondBrain, queryMirrorMemory } from './ingest-api.js';
@@ -385,14 +386,14 @@ async function handleScanAll(scanUserId?: string): Promise<void> {
       onProgress: (p) => {
         fetch(`${base}/api/imessage/scan-progress`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: recallAgentHeaders(),
           body: JSON.stringify({ userId, progress: p }),
         }).catch(() => {}); // fire-and-forget, don't block scan
       },
     });
     await fetch(`${base}/api/imessage/scan-complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: recallAgentHeaders(),
       body: JSON.stringify({
         userId,
         success: true,
@@ -417,7 +418,7 @@ async function handleScanAll(scanUserId?: string): Promise<void> {
     try {
       await fetch(`${base}/api/imessage/scan-complete`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: recallAgentHeaders(),
         body: JSON.stringify({ userId, success: false, error }),
       });
     } catch { /* ignore — backend may be down */ }

@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useNavigate, Link } from "react-router-dom";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
@@ -145,7 +146,7 @@ export default function ConnectSources() {
     let cancelled = false;
     const poll = async () => {
       try {
-        const res = await fetch(`/api/imessage/scan-status?userId=${user.id}`);
+        const res = await apiFetch(`/api/imessage/scan-status?userId=${user.id}`);
         const json = await res.json();
         if (cancelled) return;
         if (json.progress) setScanProgress(json.progress);
@@ -185,7 +186,7 @@ export default function ConnectSources() {
     setScanProgress(null);
     setShowFdaModal(false);
     try {
-      const res = await fetch("/api/imessage/scan-trigger", {
+      const res = await apiFetch("/api/imessage/scan-trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),
@@ -216,7 +217,7 @@ export default function ConnectSources() {
   const handleScanCancel = async () => {
     if (!user) return;
     try {
-      await fetch("/api/imessage/scan-cancel", {
+      await apiFetch("/api/imessage/scan-cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),
@@ -269,7 +270,7 @@ export default function ConnectSources() {
     setSubmitting(true);
     setStatus(null);
     try {
-      const res = await fetch("/api/message", {
+      const res = await apiFetch("/api/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

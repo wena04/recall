@@ -1,6 +1,7 @@
 /**
  * Smoke-test local API (run API on PORT first, default 3001).
  * Uses VITE_DEV_USER_ID or DEV_USER_ID from .env.
+ * Set RECALL_AGENT_SECRET (same as server) for auth.
  */
 import 'dotenv/config';
 
@@ -10,6 +11,15 @@ if (!userId) {
   console.error('Set VITE_DEV_USER_ID in .env or run: npm run dev:ensure-user');
   process.exit(1);
 }
+if (!process.env.RECALL_AGENT_SECRET?.trim()) {
+  console.error('Set RECALL_AGENT_SECRET in .env (same value as the API server).');
+  process.exit(1);
+}
+
+const authHeaders = (): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${process.env.RECALL_AGENT_SECRET!.trim()}`,
+});
 
 const sample =
   'Philz Coffee in Sawtelle — we said we would go Saturday; Sarah picks the time.';
@@ -20,7 +30,7 @@ async function main() {
 
   const ingest = await fetch(`${base}/api/message`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({
       userId,
       type: 'text',
@@ -31,7 +41,7 @@ async function main() {
   const body = await ingest.text();
   console.log('POST /api/message', ingest.status, body.slice(0, 500));
 
-  const list = await fetch(`${base}/api/knowledge_items/${userId}`);
+  const list = await fetch(`${base}/api/knowledge_items/${userId}`, { headers: authHeaders() });
   console.log('GET /api/knowledge_items', list.status, (await list.text()).slice(0, 800));
 }
 

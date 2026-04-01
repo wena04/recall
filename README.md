@@ -52,7 +52,10 @@ For architecture, env vars, and local setup (API + web + optional iMessage agent
 ```bash
 npm install
 cp .env.example .env
+# Set RECALL_AGENT_SECRET to a long random string (and the same value in packages/imessage-agent/.env for the Mac agent).
 npm run dev
 ```
+
+**Deploy (Vercel):** add **`RECALL_AGENT_SECRET`** in project env (match the secret on the Mac that runs **`agent:notify-poll`** / **`agent:start`**). The web app sends the signed-in user’s **Supabase JWT** to `/api/*`; the agent sends **`Authorization: Bearer <RECALL_AGENT_SECRET>`**.
 
 See **`docs/GOAL.md`** and **`docs/PROGRESS.md`** for full detail.
